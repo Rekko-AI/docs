@@ -1,0 +1,4623 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Rekko AI \u2014 Prediction Market Intelligence",
+    "description": "The brain for prediction market trading. Deep AI research, Bayesian causal decomposition, portfolio-aware strategy signals, cross-platform arbitrage, and execution guidance \u2014 all in one API. Covers Kalshi and Polymarket. Clean flat JSON designed for developers and autonomous trading agents.",
+    "contact": {
+      "name": "Rekko AI",
+      "url": "https://rekko.ai/"
+    },
+    "license": {
+      "name": "Proprietary"
+    },
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Root Health",
+        "operationId": "/health",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response /Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Health check",
+        "description": "Health check with data freshness metrics.",
+        "operationId": "/v1/health",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response /V1/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/pricing": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Get tier pricing",
+        "description": "Return tier pricing for all feed endpoints (no auth required).",
+        "operationId": "/v1/pricing",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response /V1/Pricing"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/calibration": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Signal accuracy and calibration metrics",
+        "description": "Signal accuracy and calibration metrics (free, no auth required).",
+        "operationId": "/v1/calibration",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Filter by category (e.g. 'crypto', 'politics')",
+              "default": "",
+              "title": "Category"
+            },
+            "description": "Filter by category (e.g. 'crypto', 'politics')"
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Time period: '7d', '30d', '90d', or 'all'",
+              "default": "all",
+              "title": "Period"
+            },
+            "description": "Time period: '7d', '30d', '90d', or 'all'"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Trading mode: 'shadow' or 'live'",
+              "default": "shadow",
+              "title": "Mode"
+            },
+            "description": "Trading mode: 'shadow' or 'live'"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response /V1/Calibration"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/markets": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "List prediction markets",
+        "description": "List current prediction markets with pricing data.",
+        "operationId": "/v1/markets",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Filter by platform: 'kalshi' or 'polymarket'",
+              "default": "",
+              "title": "Source"
+            },
+            "description": "Filter by platform: 'kalshi' or 'polymarket'"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Maximum markets to return",
+              "default": 30,
+              "title": "Limit"
+            },
+            "description": "Maximum markets to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Market"
+                  },
+                  "title": "Response /V1/Markets"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/markets/{platform}/{market_id}": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Get a single market",
+        "description": "Get a single market listing by platform and ID.",
+        "operationId": "/v1/markets/{platform}/{market_id}",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Platform"
+            }
+          },
+          {
+            "name": "market_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Market Id"
+            }
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated expansions",
+              "default": "",
+              "title": "Expand"
+            },
+            "description": "Comma-separated expansions"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Market"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/markets/{platform}/{market_id}/history": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Get market price history",
+        "description": "Get historical price and volume data for backtesting.",
+        "operationId": "/v1/markets/{platform}/{market_id}/history",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Platform"
+            }
+          },
+          {
+            "name": "market_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Market Id"
+            }
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Time period: '48h', '7d', or '30d'",
+              "default": "7d",
+              "title": "Period"
+            },
+            "description": "Time period: '48h', '7d', or '30d'"
+          },
+          {
+            "name": "max_points",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 10,
+              "description": "Maximum data points to return",
+              "default": 48,
+              "title": "Max Points"
+            },
+            "description": "Maximum data points to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response /V1/Markets/{Platform}/{Market Id}/History"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/markets/{platform}/{market_id}/execution": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Get trade execution guidance",
+        "description": "Optimal trade execution analysis from bid/ask spread patterns.",
+        "operationId": "/v1/markets/{platform}/{market_id}/execution",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Platform"
+            }
+          },
+          {
+            "name": "market_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Market Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionGuidance"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/markets/{platform}/{market_id}/resolution": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Get resolution intelligence",
+        "description": "Resolution timing, mechanism, and time-value analysis.",
+        "operationId": "/v1/markets/{platform}/{market_id}/resolution",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Platform"
+            }
+          },
+          {
+            "name": "market_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Market Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolutionIntelligence"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/markets/{platform}/{market_id}/analysis": {
+      "get": {
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Get latest analysis for a market",
+        "description": "Get the latest AI analysis for a market, keyed by platform and market ID.",
+        "operationId": "/v1/markets/{platform}/{market_id}/analysis",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Platform"
+            }
+          },
+          {
+            "name": "market_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Market Id"
+            }
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated expansions",
+              "default": "",
+              "title": "Expand"
+            },
+            "description": "Comma-separated expansions"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Analysis"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analyses": {
+      "get": {
+        "tags": [
+          "Insights"
+        ],
+        "summary": "List recent analyses",
+        "description": "List recent analysis summaries, keyed by market.",
+        "operationId": "/v1/analyses",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "Maximum analyses to return",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Maximum analyses to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnalysisSummary"
+                  },
+                  "title": "Response /V1/Analyses"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/markets/{platform}/{market_id}/analyze": {
+      "post": {
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Trigger new analysis",
+        "description": "Start an async analysis for a specific market. Poll the status URL for completion.",
+        "operationId": "/v1/markets/{platform}/{market_id}/analyze",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Platform"
+            }
+          },
+          {
+            "name": "market_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Market Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/markets/{platform}/{market_id}/analyze/{analysis_id}/status": {
+      "get": {
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Poll analysis status",
+        "description": "Check the status of an async analysis.",
+        "operationId": "/v1/markets/{platform}/{market_id}/analyze/{analysis_id}/status",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Platform"
+            }
+          },
+          {
+            "name": "market_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Market Id"
+            }
+          },
+          {
+            "name": "analysis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Analysis Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/screen": {
+      "post": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Batch screen markets",
+        "description": "Batch screen markets with lightweight scoring (no LLM pipeline).",
+        "operationId": "/v1/screen",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScreenResult"
+                  },
+                  "type": "array",
+                  "title": "Response /V1/Screen"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/signals": {
+      "post": {
+        "tags": [
+          "Strategy"
+        ],
+        "summary": "Generate AI strategy signal",
+        "description": "Generate an actionable strategy signal for a market.\n\nDefault: returns 202 with analysis_id for polling.\nWith ?wait=true: blocks until pipeline completes (30-90 seconds).\nIf a cached analysis exists (<24h): returns immediately.\nUse \"force\": true to bypass cache.",
+        "operationId": "/v1/signals",
+        "parameters": [
+          {
+            "name": "wait",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Block until analysis completes (up to 5 min)",
+              "default": false,
+              "title": "Wait"
+            },
+            "description": "Block until analysis completes (up to 5 min)"
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated expansions",
+              "default": "",
+              "title": "Expand"
+            },
+            "description": "Comma-separated expansions"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Signal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/signals/portfolio": {
+      "post": {
+        "tags": [
+          "Portfolio"
+        ],
+        "summary": "Portfolio-aware strategy signal",
+        "description": "Portfolio-aware strategy signal with correlation analysis and hedge recommendations.",
+        "operationId": "/v1/signals/portfolio",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortfolioStrategyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioSignal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/arbitrage": {
+      "get": {
+        "tags": [
+          "Arbitrage"
+        ],
+        "summary": "Get arbitrage opportunities",
+        "description": "Get cached arbitrage opportunities with composite scoring.",
+        "operationId": "/v1/arbitrage",
+        "parameters": [
+          {
+            "name": "min_spread",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 0.5,
+              "minimum": 0.0,
+              "description": "Minimum spread filter",
+              "default": 0.02,
+              "title": "Min Spread"
+            },
+            "description": "Minimum spread filter"
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated expansions",
+              "default": "",
+              "title": "Expand"
+            },
+            "description": "Comma-separated expansions"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArbitrageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/arbitrage/live": {
+      "get": {
+        "tags": [
+          "Arbitrage"
+        ],
+        "summary": "Live arbitrage scan",
+        "description": "Run a fresh arbitrage scan (may take 10-30 seconds).",
+        "operationId": "/v1/arbitrage/live",
+        "parameters": [
+          {
+            "name": "min_spread",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 0.5,
+              "minimum": 0.0,
+              "description": "Minimum spread filter",
+              "default": 0.02,
+              "title": "Min Spread"
+            },
+            "description": "Minimum spread filter"
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated expansions",
+              "default": "",
+              "title": "Expand"
+            },
+            "description": "Comma-separated expansions"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArbitrageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/correlation": {
+      "post": {
+        "tags": [
+          "Portfolio"
+        ],
+        "summary": "Cross-market correlation analysis",
+        "description": "Cross-market correlation analysis for portfolio diversification.",
+        "operationId": "/v1/correlation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrelationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationGraph"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trades/report": {
+      "post": {
+        "tags": [
+          "Consensus"
+        ],
+        "summary": "Report a trade for consensus",
+        "description": "Report a trade for consensus probability aggregation.",
+        "operationId": "/v1/trades/report",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TradeReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TradeReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/markets/{platform}/{market_id}/consensus": {
+      "get": {
+        "tags": [
+          "Consensus"
+        ],
+        "summary": "Get consensus probability",
+        "description": "Get consensus probability from aggregated agent trades.",
+        "operationId": "/v1/markets/{platform}/{market_id}/consensus",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Platform"
+            }
+          },
+          {
+            "name": "market_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Market Id"
+            }
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Lookback: '24h', '7d', '30d'",
+              "default": "7d",
+              "title": "Period"
+            },
+            "description": "Lookback: '24h', '7d', '30d'"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsensusView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks": {
+      "get": {
+        "tags": [
+          "Streaming"
+        ],
+        "summary": "List webhooks",
+        "description": "List your registered webhooks.",
+        "operationId": "/v1/webhooks",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WebhookInfo"
+                  },
+                  "type": "array",
+                  "title": "Response /V1/Webhooks"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Streaming"
+        ],
+        "summary": "Register a webhook",
+        "description": "Register a webhook for real-time event notifications.",
+        "operationId": "/v1/webhooks/create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookRegistration"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/{webhook_id}": {
+      "delete": {
+        "tags": [
+          "Streaming"
+        ],
+        "summary": "Remove a webhook",
+        "description": "Unregister a webhook.",
+        "operationId": "/v1/webhooks/{webhook_id}",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Webhook Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response /V1/Webhooks/{Webhook Id}"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stream": {
+      "get": {
+        "tags": [
+          "Streaming"
+        ],
+        "summary": "Real-time SSE event stream",
+        "description": "Server-Sent Events stream for real-time market signals.",
+        "operationId": "/v1/stream",
+        "parameters": [
+          {
+            "name": "events",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated event types: price_shift, whale_alert, analysis_complete",
+              "default": "",
+              "title": "Events"
+            },
+            "description": "Comma-separated event types: price_shift, whale_alert, analysis_complete"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sentiment": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Market sentiment snapshot",
+        "description": "Aggregate market sentiment from price momentum and volume trends.",
+        "operationId": "/v1/sentiment",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentimentSnapshot"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/performance": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Trading track record",
+        "description": "Win rate, P&L, ROI, and edge metrics.",
+        "operationId": "/v1/performance",
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Trading mode: 'shadow' or 'live'",
+              "default": "shadow",
+              "title": "Mode"
+            },
+            "description": "Trading mode: 'shadow' or 'live'"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerformanceSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/performance/history": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Equity curve history",
+        "description": "Daily P&L time series for equity curve charting.",
+        "operationId": "/v1/performance/history",
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Trading mode: 'shadow' or 'live'",
+              "default": "shadow",
+              "title": "Mode"
+            },
+            "description": "Trading mode: 'shadow' or 'live'"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerformanceSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/customers/me": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Get Customer Me",
+        "description": "Get the authenticated customer's profile and usage stats.\n\nUses the customer's own API key for auth \u2014 no internal key needed.",
+        "operationId": "/v1/customers/me",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response /V1/Customers/Me"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/customers/profile": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Get Customer Profile",
+        "description": "Get customer profile and monthly usage. Requires internal key.",
+        "operationId": "/v1/customers/profile",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response /V1/Customers/Profile"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/customers/signup": {
+      "post": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Signup",
+        "description": "Create a free-tier account. Returns a one-time API key.",
+        "operationId": "/v1/customers/signup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignupResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/customers/upsert": {
+      "post": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Upsert Customer Admin",
+        "description": "Upsert a customer record. Requires internal key.",
+        "operationId": "/v1/customers/upsert",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response /V1/Customers/Upsert"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/customers/reset": {
+      "post": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Reset Customer",
+        "description": "Reset a customer's API key (re-provision on next signup). Requires internal key.",
+        "operationId": "/v1/customers/reset",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response /V1/Customers/Reset"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/stripe": {
+      "post": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Stripe Webhook",
+        "description": "Handle Stripe subscription lifecycle events.\n\nUnauthenticated but verified via Stripe webhook signing secret.",
+        "operationId": "/v1/webhooks/stripe",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response /V1/Webhooks/Stripe"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Analysis": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "kalshi or polymarket"
+          },
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Platform-specific market identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Market question"
+          },
+          "probability": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Probability",
+            "description": "Rekko's estimated true probability"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "description": "Confidence in the estimate"
+          },
+          "edge": {
+            "type": "number",
+            "title": "Edge",
+            "description": "estimated_prob - market_price (positive = underpriced YES)",
+            "default": 0.0
+          },
+          "recommendation": {
+            "type": "string",
+            "title": "Recommendation",
+            "description": "BUY_YES, BUY_NO, or NO_TRADE"
+          },
+          "risk_rating": {
+            "type": "string",
+            "title": "Risk Rating",
+            "description": "low, medium, or high",
+            "default": "medium"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "description": "Executive summary of the analysis"
+          },
+          "key_factors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Key Factors",
+            "description": "Top probability drivers"
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Risks",
+            "description": "Ways the analysis could be wrong"
+          },
+          "source_count": {
+            "type": "integer",
+            "title": "Source Count",
+            "description": "Number of sources analyzed",
+            "default": 0
+          },
+          "analyzed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Analyzed At",
+            "description": "When the analysis was produced"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At",
+            "description": "Signal staleness window"
+          },
+          "freshness": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fresh",
+                  "stale",
+                  "expired"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freshness",
+            "description": "Data freshness: fresh (<24h), stale (24-72h), expired (>72h)"
+          },
+          "analysis_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "full",
+                  "light"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Type",
+            "description": "Whether this was a full 4-stage or light 2-call analysis"
+          },
+          "scenarios": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AnalysisScenario"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenarios",
+            "description": "Bull/base/bear scenarios (?expand=scenarios)"
+          },
+          "causal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CausalDecomposition"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Causal factor decomposition (?expand=causal)"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnalysisMeta"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pipeline metadata (?expand=meta)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "market_id",
+          "title",
+          "probability",
+          "confidence",
+          "recommendation",
+          "summary"
+        ],
+        "title": "Analysis",
+        "description": "AI-generated research analysis for a prediction market.\n\nCore fields are always present. Detailed breakdowns available\nvia ?expand=scenarios,causal,meta.",
+        "example": {
+          "analyzed_at": "2026-03-21T12:00:00Z",
+          "confidence": 0.82,
+          "edge": 0.09,
+          "expires_at": "2026-03-22T12:00:00Z",
+          "key_factors": [
+            "PCE inflation at 2.1% \u2014 within Fed target range",
+            "Three FOMC members signaled openness to cuts in recent speeches",
+            "Jobless claims trending upward (225K \u2192 238K over 4 weeks)"
+          ],
+          "market_id": "KXFED-26MAR19",
+          "platform": "kalshi",
+          "probability": 0.71,
+          "recommendation": "BUY_YES",
+          "risk_rating": "low",
+          "risks": [
+            "Strong March employment report could reverse dovish signals",
+            "Tariff escalation could reignite inflation expectations"
+          ],
+          "source_count": 14,
+          "summary": "Fed futures imply 68% probability of a March cut. PCE inflation at 2.1% is within the Fed's comfort zone, and three FOMC members have signaled openness to easing. Our research across 14 sources estimates 71% true probability \u2014 a 9-point edge over the current market price of 62c.",
+          "title": "Will the Fed cut rates at the March 2026 meeting?"
+        }
+      },
+      "AnalysisMeta": {
+        "properties": {
+          "what_would_change_mind": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "What Would Change Mind",
+            "description": "Events that would change the recommendation"
+          },
+          "edge_assessment": {
+            "type": "string",
+            "title": "Edge Assessment",
+            "description": "Market edge analysis",
+            "default": ""
+          },
+          "models_used": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models Used",
+            "description": "Models used in the pipeline"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms",
+            "description": "How long the analysis took",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "AnalysisMeta",
+        "description": "Internal metadata about how an analysis was produced (opt-in via ?expand=meta).",
+        "example": {
+          "duration_ms": 42300,
+          "edge_assessment": "Market at 62c implies 62% probability. Our 71% estimate gives +9c edge \u2014 significant at this confidence level.",
+          "models_used": [
+            "gemini-3.1-pro-preview",
+            "claude-sonnet-4-5"
+          ],
+          "what_would_change_mind": [
+            "CPI surprise above 2.5%",
+            "Strong employment report (NFP > 250K)",
+            "Hawkish Fed minutes release"
+          ]
+        }
+      },
+      "AnalysisScenario": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Scenario name, e.g. 'Bull (rate cut)'"
+          },
+          "probability": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Probability",
+            "description": "Scenario probability"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "What happens in this scenario"
+          },
+          "trigger": {
+            "type": "string",
+            "title": "Trigger",
+            "description": "Events that trigger this scenario",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "probability",
+          "description"
+        ],
+        "title": "AnalysisScenario",
+        "description": "A scenario assessment (bull/base/bear).",
+        "example": {
+          "description": "Fed delivers 25bp cut citing cooling inflation and softening labor market",
+          "name": "Bull (rate cut)",
+          "probability": 0.71,
+          "trigger": "PCE stays below 2.2%, jobless claims rise above 230K"
+        }
+      },
+      "AnalysisStatus": {
+        "properties": {
+          "analysis_id": {
+            "type": "string",
+            "title": "Analysis Id",
+            "description": "Opaque analysis identifier (rk-...)"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "complete",
+              "error"
+            ],
+            "title": "Status",
+            "description": "Current status"
+          },
+          "poll_url": {
+            "type": "string",
+            "title": "Poll Url",
+            "description": "URL to poll for status updates",
+            "default": ""
+          },
+          "estimated_seconds": {
+            "type": "integer",
+            "title": "Estimated Seconds",
+            "description": "Estimated time to completion",
+            "default": 60
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message",
+            "description": "Error details if status is 'error'"
+          }
+        },
+        "type": "object",
+        "required": [
+          "analysis_id",
+          "status"
+        ],
+        "title": "AnalysisStatus",
+        "description": "Status of an async analysis request.",
+        "example": {
+          "analysis_id": "rk-a1b2c3d4e5f6",
+          "estimated_seconds": 60,
+          "poll_url": "/v1/markets/kalshi/KXFED-26MAR19/analyze/rk-a1b2c3d4e5f6/status",
+          "status": "running"
+        }
+      },
+      "AnalysisSummary": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "kalshi or polymarket"
+          },
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Platform-specific market identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Market question"
+          },
+          "probability": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Probability",
+            "description": "Estimated probability"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "description": "Confidence level"
+          },
+          "recommendation": {
+            "type": "string",
+            "title": "Recommendation",
+            "description": "BUY_YES, BUY_NO, or NO_TRADE"
+          },
+          "analyzed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Analyzed At",
+            "description": "When analyzed"
+          },
+          "freshness": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fresh",
+                  "stale",
+                  "expired"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freshness",
+            "description": "Data freshness: fresh (<24h), stale (24-72h), expired (>72h)"
+          },
+          "analysis_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "full",
+                  "light"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Type",
+            "description": "Whether this was a full 4-stage or light 2-call analysis"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "market_id",
+          "title",
+          "probability",
+          "confidence",
+          "recommendation",
+          "analyzed_at"
+        ],
+        "title": "AnalysisSummary",
+        "description": "Compact analysis entry for list endpoints.",
+        "example": {
+          "analyzed_at": "2026-03-21T12:00:00Z",
+          "confidence": 0.82,
+          "market_id": "KXFED-26MAR19",
+          "platform": "kalshi",
+          "probability": 0.71,
+          "recommendation": "BUY_YES",
+          "title": "Will the Fed cut rates at the March 2026 meeting?"
+        }
+      },
+      "ArbitrageOpportunity": {
+        "properties": {
+          "event": {
+            "type": "string",
+            "title": "Event",
+            "description": "Matched event title"
+          },
+          "kalshi": {
+            "$ref": "#/components/schemas/ArbitragePlatformSide",
+            "description": "Kalshi side"
+          },
+          "polymarket": {
+            "$ref": "#/components/schemas/ArbitragePlatformSide",
+            "description": "Polymarket side"
+          },
+          "spread": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Spread",
+            "description": "Absolute price spread"
+          },
+          "spread_pct": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Spread Pct",
+            "description": "Spread as percentage (e.g. 5.0 = 5%)"
+          },
+          "cheaper_on": {
+            "type": "string",
+            "title": "Cheaper On",
+            "description": "Platform with lower YES price"
+          },
+          "score": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "description": "Composite quality score (0-100)"
+          },
+          "match_confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Match Confidence",
+            "description": "Fuzzy title match confidence"
+          },
+          "spread_score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Score",
+            "description": "Score from spread magnitude (40% weight)"
+          },
+          "liquidity_score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Liquidity Score",
+            "description": "Score from combined platform liquidity (20% weight)"
+          },
+          "match_confidence_score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Confidence Score",
+            "description": "Score from title match quality (20% weight)"
+          },
+          "execution_score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Score",
+            "description": "Score from execution feasibility (20% weight)"
+          },
+          "scanned_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Scanned At",
+            "description": "When this opportunity was detected"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event",
+          "kalshi",
+          "polymarket",
+          "spread",
+          "spread_pct",
+          "cheaper_on",
+          "score",
+          "match_confidence",
+          "scanned_at"
+        ],
+        "title": "ArbitrageOpportunity",
+        "description": "Cross-platform arbitrage opportunity with composite scoring.",
+        "example": {
+          "cheaper_on": "kalshi",
+          "event": "Fed rate cut March 2026",
+          "kalshi": {
+            "market_id": "KXFED-26MAR19",
+            "url": "https://kalshi.com/markets/kxfed/kxfed-26mar19",
+            "yes_price": 0.62
+          },
+          "match_confidence": 0.92,
+          "polymarket": {
+            "market_id": "0x1234abcd",
+            "url": "https://polymarket.com/event/fed-rate-cut-march-2026",
+            "yes_price": 0.68
+          },
+          "scanned_at": "2026-03-21T14:30:00Z",
+          "score": 78,
+          "spread": 0.06,
+          "spread_pct": 6.0
+        }
+      },
+      "ArbitragePlatformSide": {
+        "properties": {
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Platform-specific market identifier"
+          },
+          "yes_price": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Yes Price",
+            "description": "YES probability"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Market URL",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_id",
+          "yes_price"
+        ],
+        "title": "ArbitragePlatformSide",
+        "description": "One side of an arbitrage opportunity.",
+        "example": {
+          "market_id": "KXFED-26MAR19",
+          "url": "https://kalshi.com/markets/kxfed/kxfed-26mar19",
+          "yes_price": 0.62
+        }
+      },
+      "ArbitrageResponse": {
+        "properties": {
+          "scanned_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Scanned At",
+            "description": "Exact scan timestamp"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "description": "Number of opportunities",
+            "default": 0
+          },
+          "opportunities": {
+            "items": {
+              "$ref": "#/components/schemas/ArbitrageOpportunity"
+            },
+            "type": "array",
+            "title": "Opportunities",
+            "description": "Opportunities ranked by score (highest first)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scanned_at"
+        ],
+        "title": "ArbitrageResponse",
+        "description": "Cross-platform arbitrage scan results.",
+        "example": {
+          "count": 1,
+          "opportunities": [
+            {
+              "cheaper_on": "kalshi",
+              "event": "Fed rate cut March 2026",
+              "kalshi": {
+                "market_id": "KXFED-26MAR19",
+                "url": "https://kalshi.com/markets/kxfed/kxfed-26mar19",
+                "yes_price": 0.62
+              },
+              "match_confidence": 0.92,
+              "polymarket": {
+                "market_id": "0x1234abcd",
+                "url": "https://polymarket.com/event/fed-rate-cut-march-2026",
+                "yes_price": 0.68
+              },
+              "scanned_at": "2026-03-21T14:30:00Z",
+              "score": 78,
+              "spread": 0.06,
+              "spread_pct": 6.0
+            }
+          ],
+          "scanned_at": "2026-03-21T14:30:00Z"
+        }
+      },
+      "CausalDecomposition": {
+        "properties": {
+          "overall_probability": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Overall Probability",
+            "description": "Aggregated probability from factor weights"
+          },
+          "overall_confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Overall Confidence",
+            "description": "Weighted confidence across all factors"
+          },
+          "factors": {
+            "items": {
+              "$ref": "#/components/schemas/CausalFactor"
+            },
+            "type": "array",
+            "title": "Factors",
+            "description": "Causal factors (typically 3-7)"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method",
+            "description": "Aggregation method: weighted_bayesian, linear, log_odds",
+            "default": "weighted_bayesian"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "When this decomposition was produced"
+          }
+        },
+        "type": "object",
+        "required": [
+          "overall_probability",
+          "overall_confidence",
+          "factors"
+        ],
+        "title": "CausalDecomposition",
+        "description": "Weighted causal decomposition of a market probability estimate.\n\nBreaks a probability estimate into evidence-backed factors with\nBayesian prior/posterior updates.",
+        "example": {
+          "factors": [
+            {
+              "claim": "Inflation is within Fed's comfort zone",
+              "confidence": 0.9,
+              "direction": "supports_yes",
+              "evidence": [
+                "PCE Feb 2026: 2.1%",
+                "Core CPI declining 3 months"
+              ],
+              "posterior": 0.82,
+              "prior": 0.6,
+              "weight": 0.35
+            },
+            {
+              "claim": "Fed rhetoric is dovish",
+              "confidence": 0.75,
+              "direction": "supports_yes",
+              "evidence": [
+                "Waller speech March 12",
+                "Bostic: 'open to adjustment'"
+              ],
+              "posterior": 0.68,
+              "prior": 0.5,
+              "weight": 0.3
+            },
+            {
+              "claim": "Tariff uncertainty creates headwinds",
+              "confidence": 0.6,
+              "direction": "supports_no",
+              "evidence": [
+                "New tariffs announced March 5",
+                "Trade deficit widening"
+              ],
+              "posterior": 0.45,
+              "prior": 0.4,
+              "weight": 0.2
+            }
+          ],
+          "generated_at": "2026-03-21T12:00:00Z",
+          "method": "weighted_bayesian",
+          "overall_confidence": 0.82,
+          "overall_probability": 0.71
+        }
+      },
+      "CausalFactor": {
+        "properties": {
+          "claim": {
+            "type": "string",
+            "title": "Claim",
+            "description": "The factor statement, e.g. 'Fed will hold rates'"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "supports_yes",
+              "supports_no",
+              "neutral"
+            ],
+            "title": "Direction",
+            "description": "Whether this factor pushes toward YES or NO resolution"
+          },
+          "weight": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "description": "Relative importance weight (top-level factors sum to ~1.0)"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "description": "Confidence in this specific factor (0=uncertain, 1=certain)"
+          },
+          "prior": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Prior",
+            "description": "Prior probability (base rate)"
+          },
+          "posterior": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Posterior",
+            "description": "Updated probability after evidence (Bayesian posterior)"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence",
+            "description": "Key evidence supporting this factor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claim",
+          "direction",
+          "weight",
+          "confidence",
+          "prior",
+          "posterior"
+        ],
+        "title": "CausalFactor",
+        "description": "A single factor in a causal decomposition.",
+        "example": {
+          "claim": "Inflation is within Fed's comfort zone",
+          "confidence": 0.9,
+          "direction": "supports_yes",
+          "evidence": [
+            "PCE Feb 2026: 2.1% (below 2.5% target ceiling)",
+            "Core CPI declining for 3 consecutive months"
+          ],
+          "posterior": 0.82,
+          "prior": 0.6,
+          "weight": 0.35
+        }
+      },
+      "ConsensusView": {
+        "properties": {
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Market identifier"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Platform",
+            "default": "kalshi"
+          },
+          "consensus_probability": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consensus Probability",
+            "description": "Volume-weighted implied probability from agent trades"
+          },
+          "sample_size": {
+            "type": "integer",
+            "title": "Sample Size",
+            "description": "Number of agent trades",
+            "default": 0
+          },
+          "unique_agents": {
+            "type": "integer",
+            "title": "Unique Agents",
+            "description": "Distinct agents who traded",
+            "default": 0
+          },
+          "rekko_probability": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rekko Probability",
+            "description": "Rekko's latest estimated probability"
+          },
+          "divergence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Divergence",
+            "description": "consensus - rekko probability"
+          },
+          "divergence_signal": {
+            "type": "string",
+            "title": "Divergence Signal",
+            "description": "'crowd_agrees', 'crowd_disagrees', 'strong_divergence', 'neutral', or 'insufficient_data'",
+            "default": "neutral"
+          },
+          "yes_volume_usd": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Yes Volume Usd",
+            "description": "Total YES volume",
+            "default": 0.0
+          },
+          "no_volume_usd": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "No Volume Usd",
+            "description": "Total NO volume",
+            "default": 0.0
+          },
+          "yes_trade_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Yes Trade Count",
+            "description": "YES trade count",
+            "default": 0
+          },
+          "no_trade_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "No Trade Count",
+            "description": "NO trade count",
+            "default": 0
+          },
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "description": "Lookback period",
+            "default": "7d"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_id"
+        ],
+        "title": "ConsensusView",
+        "description": "Aggregated consensus from agent trading activity.",
+        "example": {
+          "consensus_probability": 0.69,
+          "divergence": -0.02,
+          "divergence_signal": "crowd_agrees",
+          "generated_at": "2026-03-21T14:30:00Z",
+          "market_id": "KXFED-26MAR19",
+          "no_trade_count": 8,
+          "no_volume_usd": 1450.0,
+          "period": "7d",
+          "platform": "kalshi",
+          "rekko_probability": 0.71,
+          "sample_size": 23,
+          "unique_agents": 8,
+          "yes_trade_count": 15,
+          "yes_volume_usd": 3200.0
+        }
+      },
+      "CorrelationGraph": {
+        "properties": {
+          "market_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Market Ids",
+            "description": "Markets analyzed"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Platform"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "description": "Lookback period used"
+          },
+          "pairs": {
+            "items": {
+              "$ref": "#/components/schemas/MarketCorrelationPair"
+            },
+            "type": "array",
+            "title": "Pairs",
+            "description": "All pairwise correlation coefficients"
+          },
+          "clusters": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Clusters",
+            "description": "Groups of correlated markets (correlation > 0.5)"
+          },
+          "concentration_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Concentration Warnings",
+            "description": "Warnings about highly correlated pairs"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "When this analysis was generated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_ids",
+          "platform",
+          "period"
+        ],
+        "title": "CorrelationGraph",
+        "description": "Cross-market correlation analysis.",
+        "example": {
+          "clusters": [
+            [
+              "KXFED-26MAR19",
+              "KXCPI-26MAR"
+            ]
+          ],
+          "concentration_warnings": [
+            "KXFED-26MAR19 and KXCPI-26MAR are highly correlated (0.73) \u2014 holding both creates concentration risk on Fed policy"
+          ],
+          "generated_at": "2026-03-21T14:30:00Z",
+          "market_ids": [
+            "KXFED-26MAR19",
+            "KXCPI-26MAR",
+            "KXUNEMP-4.5"
+          ],
+          "pairs": [
+            {
+              "correlation": 0.73,
+              "data_points": 168,
+              "market_a": "KXFED-26MAR19",
+              "market_b": "KXCPI-26MAR",
+              "relationship": "strong_positive"
+            },
+            {
+              "correlation": 0.45,
+              "data_points": 168,
+              "market_a": "KXFED-26MAR19",
+              "market_b": "KXUNEMP-4.5",
+              "relationship": "positive"
+            },
+            {
+              "correlation": -0.12,
+              "data_points": 168,
+              "market_a": "KXCPI-26MAR",
+              "market_b": "KXUNEMP-4.5",
+              "relationship": "neutral"
+            }
+          ],
+          "period": "7d",
+          "platform": "kalshi"
+        }
+      },
+      "CorrelationRequest": {
+        "properties": {
+          "market_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 2,
+            "title": "Market Ids",
+            "description": "Market IDs to correlate"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Platform for all markets",
+            "default": "kalshi"
+          },
+          "period": {
+            "type": "string",
+            "title": "Period",
+            "description": "Lookback period: '48h', '7d', '30d'",
+            "default": "7d"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_ids"
+        ],
+        "title": "CorrelationRequest",
+        "description": "Request for cross-market correlation analysis.",
+        "example": {
+          "market_ids": [
+            "KXFED-26MAR19",
+            "KXCPI-26MAR",
+            "KXUNEMP-4.5"
+          ],
+          "period": "7d",
+          "platform": "kalshi"
+        }
+      },
+      "ExecutionGuidance": {
+        "properties": {
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Market identifier"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "kalshi or polymarket"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Market title",
+            "default": ""
+          },
+          "current_bid": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Bid",
+            "description": "Current best YES bid"
+          },
+          "current_ask": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Ask",
+            "description": "Current best YES ask"
+          },
+          "current_spread": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Spread",
+            "description": "Current bid-ask spread"
+          },
+          "avg_spread_48h": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Spread 48H",
+            "description": "Average spread over last 48h"
+          },
+          "spread_percentile": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Percentile",
+            "description": "Current spread percentile vs 48h history (lower = tighter than usual)"
+          },
+          "spread_trend": {
+            "type": "string",
+            "title": "Spread Trend",
+            "description": "Spread direction: 'tightening', 'widening', or 'stable'",
+            "default": "stable"
+          },
+          "liquidity_score": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Liquidity Score",
+            "description": "Liquidity quality 0-100 based on spread + volume",
+            "default": 50
+          },
+          "estimated_slippage_pct": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Estimated Slippage Pct",
+            "description": "Estimated slippage as percentage of price",
+            "default": 0.0
+          },
+          "recommendation": {
+            "type": "string",
+            "title": "Recommendation",
+            "description": "LIMIT_ORDER, MARKET_ORDER, or WAIT",
+            "default": "MARKET_ORDER"
+          },
+          "suggested_limit_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Limit Price",
+            "description": "Suggested limit price (midpoint adjusted for spread direction)"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale",
+            "description": "Explanation of the recommendation",
+            "default": ""
+          },
+          "upcoming_event": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upcoming Event",
+            "description": "Nearby event that may affect spreads"
+          },
+          "hours_to_event": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours To Event",
+            "description": "Hours until the next relevant event"
+          },
+          "tick_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Tick Count",
+            "description": "Number of ticks analyzed",
+            "default": 0
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "When this guidance was generated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_id",
+          "platform"
+        ],
+        "title": "ExecutionGuidance",
+        "description": "Optimal trade execution analysis from tick data.",
+        "example": {
+          "avg_spread_48h": 0.03,
+          "current_ask": 0.64,
+          "current_bid": 0.6,
+          "current_spread": 0.04,
+          "estimated_slippage_pct": 0.8,
+          "generated_at": "2026-03-21T14:30:00Z",
+          "hours_to_event": 18.5,
+          "liquidity_score": 68,
+          "market_id": "KXFED-26MAR19",
+          "platform": "kalshi",
+          "rationale": "Spread is wider than usual (72nd percentile). Use a limit order at 0.61 to capture midpoint. Avoid market orders \u2014 slippage ~0.8% at current depth.",
+          "recommendation": "LIMIT_ORDER",
+          "spread_percentile": 72.0,
+          "spread_trend": "widening",
+          "suggested_limit_price": 0.61,
+          "tick_count": 96,
+          "title": "Will the Fed cut rates at the March 2026 meeting?",
+          "upcoming_event": "FOMC Statement"
+        }
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HedgeRecommendation": {
+        "properties": {
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Market to trade for hedging"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Platform"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Market title",
+            "default": ""
+          },
+          "side": {
+            "type": "string",
+            "title": "Side",
+            "description": "'yes' or 'no' \u2014 the hedge side"
+          },
+          "suggested_size_usd": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Suggested Size Usd",
+            "description": "Suggested hedge size"
+          },
+          "rationale": {
+            "type": "string",
+            "title": "Rationale",
+            "description": "Why this hedge reduces risk"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_id",
+          "platform",
+          "side",
+          "suggested_size_usd",
+          "rationale"
+        ],
+        "title": "HedgeRecommendation",
+        "description": "A suggested hedge trade to reduce portfolio risk.",
+        "example": {
+          "market_id": "KXUNEMP-4.5",
+          "platform": "kalshi",
+          "rationale": "Negatively correlated with your Fed rate cut position \u2014 if the economy stays strong (no cut), unemployment stays low (NO wins)",
+          "side": "no",
+          "suggested_size_usd": 100.0,
+          "title": "Will unemployment exceed 4.5%?"
+        }
+      },
+      "KeyDate": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date",
+            "description": "The key date"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "What happens on this date"
+          },
+          "impact": {
+            "type": "string",
+            "title": "Impact",
+            "description": "Expected impact: 'high', 'medium', 'low'",
+            "default": "medium"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "label"
+        ],
+        "title": "KeyDate",
+        "description": "A significant date related to market resolution.",
+        "example": {
+          "date": "2026-03-19T14:00:00Z",
+          "impact": "high",
+          "label": "FOMC Rate Decision announcement"
+        }
+      },
+      "Market": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "kalshi or polymarket"
+          },
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Platform-specific identifier (ticker or numeric ID)"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Market question / title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Public URL on the source platform",
+            "default": ""
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Market category if known",
+            "default": ""
+          },
+          "yes_price": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Yes Price",
+            "description": "Current YES price (probability)"
+          },
+          "volume_24h": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Volume 24H",
+            "description": "24h trading volume in USD",
+            "default": 0.0
+          },
+          "liquidity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Liquidity",
+            "description": "Current liquidity in USD"
+          },
+          "open_interest": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Interest",
+            "description": "Open interest in USD"
+          },
+          "resolution_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Date",
+            "description": "Expected resolution date (ISO 8601)"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "When this data was last refreshed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "market_id",
+          "title",
+          "yes_price",
+          "updated_at"
+        ],
+        "title": "Market",
+        "description": "Prediction market with live pricing data.",
+        "example": {
+          "category": "economics",
+          "liquidity": 85000.0,
+          "market_id": "KXFED-26MAR19",
+          "open_interest": 312000.0,
+          "platform": "kalshi",
+          "resolution_date": "2026-03-19T20:00:00Z",
+          "title": "Will the Fed cut rates at the March 2026 meeting?",
+          "updated_at": "2026-03-21T14:30:00Z",
+          "url": "https://kalshi.com/markets/kxfed/kxfed-26mar19",
+          "volume_24h": 142350.0,
+          "yes_price": 0.62
+        }
+      },
+      "MarketCorrelationPair": {
+        "properties": {
+          "market_a": {
+            "type": "string",
+            "title": "Market A",
+            "description": "First market ID"
+          },
+          "market_b": {
+            "type": "string",
+            "title": "Market B",
+            "description": "Second market ID"
+          },
+          "correlation": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "title": "Correlation",
+            "description": "Pearson correlation coefficient"
+          },
+          "data_points": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Data Points",
+            "description": "Number of overlapping time points"
+          },
+          "relationship": {
+            "type": "string",
+            "title": "Relationship",
+            "description": "'strong_positive', 'positive', 'neutral', 'negative', 'strong_negative', or 'insufficient_data'"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_a",
+          "market_b",
+          "correlation",
+          "data_points",
+          "relationship"
+        ],
+        "title": "MarketCorrelationPair",
+        "description": "Pairwise correlation between two markets.",
+        "example": {
+          "correlation": 0.73,
+          "data_points": 168,
+          "market_a": "KXFED-26MAR19",
+          "market_b": "KXCPI-26MAR",
+          "relationship": "strong_positive"
+        }
+      },
+      "PerformanceDay": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date",
+            "description": "Date in YYYY-MM-DD format"
+          },
+          "pnl": {
+            "type": "number",
+            "title": "Pnl",
+            "description": "Daily P&L in USD"
+          },
+          "cumulative_pnl": {
+            "type": "number",
+            "title": "Cumulative Pnl",
+            "description": "Cumulative P&L in USD"
+          },
+          "trades": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Trades",
+            "description": "Number of trades that day"
+          },
+          "win_rate": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Win Rate",
+            "description": "Win rate for the day"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "pnl",
+          "cumulative_pnl",
+          "trades",
+          "win_rate"
+        ],
+        "title": "PerformanceDay",
+        "description": "Daily P&L entry for equity curve charting.",
+        "example": {
+          "cumulative_pnl": 892.5,
+          "date": "2026-03-20",
+          "pnl": 42.5,
+          "trades": 3,
+          "win_rate": 0.667
+        }
+      },
+      "PerformanceSummary": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode",
+            "description": "Trading mode: 'shadow' or 'live'"
+          },
+          "total_trades": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total Trades",
+            "description": "Total trades executed"
+          },
+          "resolved_trades": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Resolved Trades",
+            "description": "Trades with known outcomes"
+          },
+          "win_rate": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Win Rate",
+            "description": "Win rate on resolved trades"
+          },
+          "total_pnl": {
+            "type": "number",
+            "title": "Total Pnl",
+            "description": "Total P&L in USD"
+          },
+          "roi_pct": {
+            "type": "number",
+            "title": "Roi Pct",
+            "description": "Return on investment percentage"
+          },
+          "avg_edge": {
+            "type": "number",
+            "title": "Avg Edge",
+            "description": "Average edge on trades"
+          },
+          "max_drawdown": {
+            "type": "number",
+            "title": "Max Drawdown",
+            "description": "Maximum drawdown in USD"
+          },
+          "sharpe_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharpe Ratio",
+            "description": "Annualized Sharpe ratio"
+          },
+          "daily_history": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PerformanceDay"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily History",
+            "description": "Daily P&L time series (only on /performance/history)"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "When this summary was generated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "total_trades",
+          "resolved_trades",
+          "win_rate",
+          "total_pnl",
+          "roi_pct",
+          "avg_edge",
+          "max_drawdown"
+        ],
+        "title": "PerformanceSummary",
+        "description": "Track record summary from shadow or live trading.",
+        "example": {
+          "avg_edge": 0.065,
+          "generated_at": "2026-03-21T15:00:00Z",
+          "max_drawdown": -145.0,
+          "mode": "shadow",
+          "resolved_trades": 112,
+          "roi_pct": 8.9,
+          "sharpe_ratio": 1.82,
+          "total_pnl": 892.5,
+          "total_trades": 156,
+          "win_rate": 0.68
+        }
+      },
+      "PortfolioImpact": {
+        "properties": {
+          "max_correlation": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "title": "Max Correlation",
+            "description": "Highest correlation between new market and any existing position"
+          },
+          "correlated_with": {
+            "type": "string",
+            "title": "Correlated With",
+            "description": "Most correlated existing position",
+            "default": ""
+          },
+          "concentration_delta": {
+            "type": "number",
+            "title": "Concentration Delta",
+            "description": "Change in portfolio concentration (positive = more concentrated)"
+          },
+          "net_exposure_change": {
+            "type": "number",
+            "title": "Net Exposure Change",
+            "description": "Net directional exposure change in USD"
+          },
+          "portfolio_risk_level": {
+            "type": "string",
+            "title": "Portfolio Risk Level",
+            "description": "'low', 'medium', 'high'",
+            "default": "low"
+          }
+        },
+        "type": "object",
+        "required": [
+          "max_correlation",
+          "concentration_delta",
+          "net_exposure_change"
+        ],
+        "title": "PortfolioImpact",
+        "description": "How a new trade would affect the portfolio.",
+        "example": {
+          "concentration_delta": 0.15,
+          "correlated_with": "KXCPI-26MAR",
+          "max_correlation": 0.73,
+          "net_exposure_change": 350.0,
+          "portfolio_risk_level": "medium"
+        }
+      },
+      "PortfolioPosition": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "kalshi or polymarket"
+          },
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Market identifier"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side",
+            "description": "'yes' or 'no'"
+          },
+          "size_usd": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Size Usd",
+            "description": "Position size in USD"
+          },
+          "entry_price": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Entry Price",
+            "description": "Entry price",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "market_id",
+          "side",
+          "size_usd"
+        ],
+        "title": "PortfolioPosition",
+        "description": "A position in the agent's current portfolio.",
+        "example": {
+          "entry_price": 0.55,
+          "market_id": "KXCPI-26MAR",
+          "platform": "kalshi",
+          "side": "yes",
+          "size_usd": 250.0
+        }
+      },
+      "PortfolioSignal": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "kalshi or polymarket"
+          },
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Market identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Market question"
+          },
+          "recommendation": {
+            "type": "string",
+            "title": "Recommendation",
+            "description": "BUY_YES, BUY_NO, NO_TRADE"
+          },
+          "target_price": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Target Price",
+            "description": "Suggested entry price"
+          },
+          "edge": {
+            "type": "number",
+            "title": "Edge",
+            "description": "estimated_prob - market_price"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "description": "Confidence in the signal"
+          },
+          "risk_rating": {
+            "type": "string",
+            "title": "Risk Rating",
+            "description": "low, medium, high"
+          },
+          "base_size_pct": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Base Size Pct",
+            "description": "Kelly-derived size before portfolio adjustment"
+          },
+          "adjusted_size_pct": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Adjusted Size Pct",
+            "description": "Size after portfolio correlation adjustment"
+          },
+          "adjusted_size_usd": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Adjusted Size Usd",
+            "description": "Dollar amount based on adjusted_size_pct * bankroll"
+          },
+          "portfolio_impact": {
+            "$ref": "#/components/schemas/PortfolioImpact",
+            "description": "How this trade affects portfolio risk"
+          },
+          "hedge_recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/HedgeRecommendation"
+            },
+            "type": "array",
+            "title": "Hedge Recommendations",
+            "description": "Suggested hedges to reduce portfolio risk"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "When this signal was produced"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At",
+            "description": "Signal staleness window"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "market_id",
+          "title",
+          "recommendation",
+          "target_price",
+          "edge",
+          "confidence",
+          "risk_rating",
+          "base_size_pct",
+          "adjusted_size_pct",
+          "adjusted_size_usd",
+          "portfolio_impact",
+          "expires_at"
+        ],
+        "title": "PortfolioSignal",
+        "description": "Strategy signal with portfolio context and adjusted sizing.",
+        "example": {
+          "adjusted_size_pct": 0.025,
+          "adjusted_size_usd": 250.0,
+          "base_size_pct": 0.035,
+          "confidence": 0.82,
+          "edge": 0.09,
+          "expires_at": "2026-03-22T14:30:00Z",
+          "generated_at": "2026-03-21T14:30:00Z",
+          "hedge_recommendations": [
+            {
+              "market_id": "KXUNEMP-4.5",
+              "platform": "kalshi",
+              "rationale": "Negatively correlated \u2014 hedges against strong economy scenario",
+              "side": "no",
+              "suggested_size_usd": 100.0,
+              "title": "Will unemployment exceed 4.5%?"
+            }
+          ],
+          "market_id": "KXFED-26MAR19",
+          "platform": "kalshi",
+          "portfolio_impact": {
+            "concentration_delta": 0.15,
+            "correlated_with": "KXCPI-26MAR",
+            "max_correlation": 0.73,
+            "net_exposure_change": 250.0,
+            "portfolio_risk_level": "medium"
+          },
+          "recommendation": "BUY_YES",
+          "risk_rating": "medium",
+          "target_price": 0.62,
+          "title": "Will the Fed cut rates at the March 2026 meeting?"
+        }
+      },
+      "PortfolioStrategyRequest": {
+        "properties": {
+          "market_query": {
+            "type": "string",
+            "title": "Market Query",
+            "description": "Market question to analyze"
+          },
+          "portfolio": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioPosition"
+            },
+            "type": "array",
+            "title": "Portfolio",
+            "description": "Current portfolio positions"
+          },
+          "bankroll_usd": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Bankroll Usd",
+            "description": "Total bankroll in USD",
+            "default": 1000.0
+          },
+          "max_position_pct": {
+            "type": "number",
+            "maximum": 0.5,
+            "minimum": 0.01,
+            "title": "Max Position Pct",
+            "description": "Max single position as fraction of bankroll",
+            "default": 0.1
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_query"
+        ],
+        "title": "PortfolioStrategyRequest",
+        "description": "Request body for portfolio-aware strategy signal.",
+        "example": {
+          "bankroll_usd": 10000.0,
+          "market_query": "Will the Fed cut rates at the March 2026 meeting?",
+          "max_position_pct": 0.05,
+          "portfolio": [
+            {
+              "entry_price": 0.55,
+              "market_id": "KXCPI-26MAR",
+              "platform": "kalshi",
+              "side": "yes",
+              "size_usd": 250.0
+            }
+          ]
+        }
+      },
+      "ResolutionIntelligence": {
+        "properties": {
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Market identifier"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "kalshi or polymarket"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Market title",
+            "default": ""
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Market status: 'active', 'closed', 'determined', 'finalized'",
+            "default": "active"
+          },
+          "expiration_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiration Date",
+            "description": "Latest expiration date"
+          },
+          "close_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Date",
+            "description": "When market stops accepting orders"
+          },
+          "hours_to_expiration": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours To Expiration",
+            "description": "Hours until expiration"
+          },
+          "resolution_mechanism": {
+            "type": "string",
+            "title": "Resolution Mechanism",
+            "description": "How this market resolves: 'scheduled_data_release', 'event_outcome', 'date_based', 'continuous_monitoring', 'unknown'",
+            "default": "unknown"
+          },
+          "rules_summary": {
+            "type": "string",
+            "title": "Rules Summary",
+            "description": "Resolution rules from the platform",
+            "default": ""
+          },
+          "time_urgency": {
+            "type": "string",
+            "title": "Time Urgency",
+            "description": "Time urgency: 'critical' (<24h), 'high' (1-3d), 'medium' (3-14d), 'low' (>14d)",
+            "default": "low"
+          },
+          "theta_estimate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theta Estimate",
+            "description": "Estimated daily time decay in cents"
+          },
+          "key_dates": {
+            "items": {
+              "$ref": "#/components/schemas/KeyDate"
+            },
+            "type": "array",
+            "title": "Key Dates",
+            "description": "Significant upcoming dates"
+          },
+          "recurring_schedule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recurring Schedule",
+            "description": "Matching RecurringSchedule name if known"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "When this intelligence was generated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_id",
+          "platform"
+        ],
+        "title": "ResolutionIntelligence",
+        "description": "Resolution timing, mechanism, and time-value analysis.",
+        "example": {
+          "close_date": "2026-03-19T14:00:00Z",
+          "expiration_date": "2026-03-19T20:00:00Z",
+          "generated_at": "2026-03-21T14:30:00Z",
+          "hours_to_expiration": 42.5,
+          "key_dates": [
+            {
+              "date": "2026-03-19T14:00:00Z",
+              "impact": "high",
+              "label": "FOMC Rate Decision announcement"
+            },
+            {
+              "date": "2026-03-19T14:30:00Z",
+              "impact": "medium",
+              "label": "Fed Chair press conference"
+            }
+          ],
+          "market_id": "KXFED-26MAR19",
+          "platform": "kalshi",
+          "recurring_schedule": "Fed Rate Decision",
+          "resolution_mechanism": "scheduled_data_release",
+          "rules_summary": "Resolves YES if the Federal Reserve announces a target rate decrease at the March 2026 FOMC meeting.",
+          "status": "active",
+          "theta_estimate": 0.3,
+          "time_urgency": "high",
+          "title": "Will the Fed cut rates at the March 2026 meeting?"
+        }
+      },
+      "ScreenRequest": {
+        "properties": {
+          "market_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Market Ids",
+            "description": "Specific market IDs to screen (if empty, lists markets with filters)"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Filter by platform: 'kalshi' or 'polymarket'",
+            "default": ""
+          },
+          "min_volume_24h": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Min Volume 24H",
+            "description": "Minimum 24h volume in USD",
+            "default": 0.0
+          },
+          "min_score": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Min Score",
+            "description": "Minimum quick_score filter",
+            "default": 0.0
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "description": "Maximum results",
+            "default": 50
+          }
+        },
+        "type": "object",
+        "title": "ScreenRequest",
+        "description": "Request body for the batch market screening endpoint.",
+        "example": {
+          "limit": 20,
+          "min_score": 0.5,
+          "min_volume_24h": 50000,
+          "platform": "kalshi"
+        }
+      },
+      "ScreenResult": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "kalshi or polymarket"
+          },
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Platform-specific market identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Market question / title"
+          },
+          "yes_price": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Yes Price",
+            "description": "Current YES price"
+          },
+          "volume_24h": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Volume 24H",
+            "description": "24h trading volume in USD"
+          },
+          "score": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "description": "Composite score (higher = more interesting)"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Category guess",
+            "default": ""
+          },
+          "trend": {
+            "type": "string",
+            "enum": [
+              "rising",
+              "falling",
+              "stable"
+            ],
+            "title": "Trend",
+            "description": "Price trend from recent ticks"
+          },
+          "volume_spike": {
+            "type": "boolean",
+            "title": "Volume Spike",
+            "description": "Whether volume is >2x the 7-day average"
+          },
+          "hours_to_resolution": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours To Resolution",
+            "description": "Hours until market resolution"
+          },
+          "bid_ask_spread": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bid Ask Spread",
+            "description": "Current bid-ask spread in cents"
+          },
+          "price_velocity_1h": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Velocity 1H",
+            "description": "Price change per hour over last hour"
+          },
+          "cached_edge": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Edge",
+            "description": "Edge from a prior analysis"
+          },
+          "cached_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Confidence",
+            "description": "Confidence from a prior analysis"
+          },
+          "cached_recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Recommendation",
+            "description": "Recommendation from a prior analysis"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "analyze",
+              "watch",
+              "skip"
+            ],
+            "title": "Action",
+            "description": "Suggested next step"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "market_id",
+          "title",
+          "yes_price",
+          "volume_24h",
+          "score",
+          "trend",
+          "volume_spike",
+          "action"
+        ],
+        "title": "ScreenResult",
+        "description": "Lightweight screening signal for a single market (no LLM required).",
+        "example": {
+          "action": "analyze",
+          "cached_confidence": 0.82,
+          "cached_edge": 0.09,
+          "cached_recommendation": "BUY_YES",
+          "category": "economics",
+          "market_id": "KXFED-26MAR19",
+          "platform": "kalshi",
+          "score": 1.45,
+          "title": "Will the Fed cut rates at the March 2026 meeting?",
+          "trend": "rising",
+          "volume_24h": 142350.0,
+          "volume_spike": true,
+          "yes_price": 0.62
+        }
+      },
+      "SentimentSnapshot": {
+        "properties": {
+          "fear_greed_index": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Fear Greed Index",
+            "description": "0=extreme fear, 50=neutral, 100=extreme greed"
+          },
+          "market_regime": {
+            "type": "string",
+            "enum": [
+              "risk_on",
+              "risk_off",
+              "neutral"
+            ],
+            "title": "Market Regime",
+            "description": "Overall market regime"
+          },
+          "volume_trend": {
+            "type": "string",
+            "enum": [
+              "rising",
+              "falling",
+              "stable"
+            ],
+            "title": "Volume Trend",
+            "description": "Aggregate volume trend"
+          },
+          "spread_trend": {
+            "type": "string",
+            "enum": [
+              "tightening",
+              "widening",
+              "stable"
+            ],
+            "title": "Spread Trend",
+            "description": "Average bid-ask spread trend"
+          },
+          "active_market_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Active Market Count",
+            "description": "Active markets tracked"
+          },
+          "dominant_category": {
+            "type": "string",
+            "title": "Dominant Category",
+            "description": "Category with highest volume"
+          },
+          "top_movers": {
+            "items": {
+              "$ref": "#/components/schemas/TopMover"
+            },
+            "type": "array",
+            "title": "Top Movers",
+            "description": "Markets with largest price moves (top 5)"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "When this snapshot was generated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fear_greed_index",
+          "market_regime",
+          "volume_trend",
+          "spread_trend",
+          "active_market_count",
+          "dominant_category"
+        ],
+        "title": "SentimentSnapshot",
+        "description": "Aggregate market sentiment derived from price and volume trends.",
+        "example": {
+          "active_market_count": 847,
+          "dominant_category": "crypto",
+          "fear_greed_index": 62,
+          "generated_at": "2026-03-21T14:30:00Z",
+          "market_regime": "risk_on",
+          "spread_trend": "stable",
+          "top_movers": [
+            {
+              "market_id": "KXBTC-100K-MAR26",
+              "platform": "kalshi",
+              "price_change_24h": 0.12,
+              "title": "Will Bitcoin exceed $100K in March 2026?",
+              "volume_24h": 892000.0,
+              "yes_price": 0.45
+            }
+          ],
+          "volume_trend": "rising"
+        }
+      },
+      "Signal": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "kalshi or polymarket"
+          },
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Platform-specific market identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Market question"
+          },
+          "recommendation": {
+            "type": "string",
+            "enum": [
+              "BUY_YES",
+              "BUY_NO",
+              "NO_TRADE"
+            ],
+            "title": "Recommendation",
+            "description": "Actionable recommendation"
+          },
+          "target_price": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Target Price",
+            "description": "Suggested entry price (0.0-1.0)"
+          },
+          "edge": {
+            "type": "number",
+            "title": "Edge",
+            "description": "estimated_prob - market_price (positive = underpriced YES)"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "description": "Confidence in the signal"
+          },
+          "risk_rating": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Risk Rating",
+            "description": "Overall risk assessment"
+          },
+          "size_pct": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Size Pct",
+            "description": "Kelly-derived position size as fraction of bankroll"
+          },
+          "time_horizon": {
+            "type": "string",
+            "title": "Time Horizon",
+            "description": "Expected resolution: 'hours', 'days', 'weeks'"
+          },
+          "hedge": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hedge",
+            "description": "Suggested hedge, e.g. 'Buy NO on KXFED-26MAR19 at 0.82'"
+          },
+          "causal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CausalDecomposition"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Causal decomposition (?expand=causal)"
+          },
+          "freshness": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fresh",
+                  "stale",
+                  "expired"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freshness",
+            "description": "Data freshness of the underlying analysis"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At",
+            "description": "When this signal was produced"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At",
+            "description": "Signal staleness window \u2014 do not trade after this time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "market_id",
+          "title",
+          "recommendation",
+          "target_price",
+          "edge",
+          "confidence",
+          "risk_rating",
+          "size_pct",
+          "time_horizon",
+          "expires_at"
+        ],
+        "title": "Signal",
+        "description": "Actionable trading signal with position sizing.\n\nThe core product \u2014 everything needed to execute a trade.",
+        "example": {
+          "confidence": 0.82,
+          "edge": 0.09,
+          "expires_at": "2026-03-22T14:30:00Z",
+          "generated_at": "2026-03-21T14:30:00Z",
+          "market_id": "KXFED-26MAR19",
+          "platform": "kalshi",
+          "recommendation": "BUY_YES",
+          "risk_rating": "low",
+          "size_pct": 0.035,
+          "target_price": 0.62,
+          "time_horizon": "days",
+          "title": "Will the Fed cut rates at the March 2026 meeting?"
+        }
+      },
+      "SignalRequest": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Filter by platform: 'kalshi' or 'polymarket'",
+            "default": ""
+          },
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Platform-specific market identifier",
+            "default": ""
+          },
+          "market_query": {
+            "type": "string",
+            "title": "Market Query",
+            "description": "Free-text market question (used if market_id not provided)",
+            "default": ""
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "description": "Force fresh analysis even if a cached result exists",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SignalRequest",
+        "description": "Request body for the signal endpoint.",
+        "example": {
+          "force": false,
+          "market_id": "KXFED-26MAR19",
+          "market_query": "",
+          "platform": "kalshi"
+        }
+      },
+      "SignupRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "Customer email address"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Customer display name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "SignupRequest"
+      },
+      "SignupResponse": {
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "title": "Api Key",
+            "description": "API key (shown once \u2014 save it now)"
+          },
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id",
+            "description": "Customer ID"
+          },
+          "plan": {
+            "type": "string",
+            "title": "Plan",
+            "description": "Plan tier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "api_key",
+          "customer_id",
+          "plan"
+        ],
+        "title": "SignupResponse"
+      },
+      "TopMover": {
+        "properties": {
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Market identifier"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "kalshi or polymarket"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Market title"
+          },
+          "yes_price": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Yes Price",
+            "description": "Current YES price"
+          },
+          "price_change_24h": {
+            "type": "number",
+            "title": "Price Change 24H",
+            "description": "Absolute price change in last 24h"
+          },
+          "volume_24h": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Volume 24H",
+            "description": "24h volume in USD"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_id",
+          "platform",
+          "title",
+          "yes_price",
+          "price_change_24h",
+          "volume_24h"
+        ],
+        "title": "TopMover",
+        "description": "A market with significant recent price movement.",
+        "example": {
+          "market_id": "KXBTC-100K-MAR26",
+          "platform": "kalshi",
+          "price_change_24h": 0.12,
+          "title": "Will Bitcoin exceed $100K in March 2026?",
+          "volume_24h": 892000.0,
+          "yes_price": 0.45
+        }
+      },
+      "TradeReport": {
+        "properties": {
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Market identifier"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Platform",
+            "default": "kalshi"
+          },
+          "side": {
+            "type": "string",
+            "title": "Side",
+            "description": "'yes' or 'no'"
+          },
+          "size_usd": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Size Usd",
+            "description": "Trade size in USD"
+          },
+          "price": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Price",
+            "description": "Execution price"
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_id",
+          "side",
+          "size_usd",
+          "price"
+        ],
+        "title": "TradeReport",
+        "description": "Agent-reported trade for consensus aggregation.",
+        "example": {
+          "market_id": "KXFED-26MAR19",
+          "platform": "kalshi",
+          "price": 0.62,
+          "side": "yes",
+          "size_usd": 200.0
+        }
+      },
+      "TradeReportResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Report status",
+            "default": "accepted"
+          },
+          "trade_count": {
+            "type": "integer",
+            "title": "Trade Count",
+            "description": "Total trades reported by this agent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trade_count"
+        ],
+        "title": "TradeReportResponse",
+        "description": "Confirmation of reported trade.",
+        "example": {
+          "status": "accepted",
+          "trade_count": 47
+        }
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WebhookInfo": {
+        "properties": {
+          "webhook_id": {
+            "type": "string",
+            "title": "Webhook Id",
+            "description": "Unique webhook identifier"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Destination URL"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Events",
+            "description": "Subscribed event types"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Whether active",
+            "default": true
+          },
+          "failure_count": {
+            "type": "integer",
+            "title": "Failure Count",
+            "description": "Consecutive delivery failures",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When registered"
+          }
+        },
+        "type": "object",
+        "required": [
+          "webhook_id",
+          "url",
+          "events",
+          "created_at"
+        ],
+        "title": "WebhookInfo",
+        "description": "Registered webhook details.",
+        "example": {
+          "created_at": "2026-03-20T10:00:00Z",
+          "enabled": true,
+          "events": [
+            "whale_alert",
+            "analysis_complete"
+          ],
+          "failure_count": 0,
+          "url": "https://my-agent.example.com/webhooks/rekko",
+          "webhook_id": "wh-f47ac10b58cc"
+        }
+      },
+      "WebhookRegistration": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "HTTPS URL to receive webhook POST requests"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Events",
+            "description": "Event types: 'price_shift', 'whale_alert', 'analysis_complete'"
+          },
+          "secret": {
+            "type": "string",
+            "title": "Secret",
+            "description": "HMAC-SHA256 secret for payload verification",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "events"
+        ],
+        "title": "WebhookRegistration",
+        "description": "Request to register a webhook.",
+        "example": {
+          "events": [
+            "whale_alert",
+            "analysis_complete"
+          ],
+          "secret": "whsec_abc123def456",
+          "url": "https://my-agent.example.com/webhooks/rekko"
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Markets",
+      "description": "Prediction market listings, history, resolution, and execution guidance"
+    },
+    {
+      "name": "Insights",
+      "description": "AI-powered research insights with causal decomposition"
+    },
+    {
+      "name": "Strategy",
+      "description": "Actionable trading signals with Kelly-derived position sizing and causal decomposition"
+    },
+    {
+      "name": "Portfolio",
+      "description": "Portfolio-aware strategy, correlation analysis, and hedge recommendations"
+    },
+    {
+      "name": "Arbitrage",
+      "description": "Cross-platform arbitrage detection (Kalshi vs Polymarket)"
+    },
+    {
+      "name": "Analytics",
+      "description": "Calibration metrics, sentiment, and performance tracking"
+    },
+    {
+      "name": "Streaming",
+      "description": "Real-time SSE event stream and webhooks"
+    },
+    {
+      "name": "Consensus",
+      "description": "Agent trade aggregation and crowd probability"
+    }
+  ]
+}

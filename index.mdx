@@ -1,97 +1,61 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: Prediction Market Intelligence API
+description: Deep AI research, causal analysis, and trading signals for Kalshi and Polymarket.
 ---
 
-## Setting up
+Rekko AI is the intelligence layer for prediction markets. Get research-backed probability estimates, causal decomposition of price drivers, portfolio-aware trading signals, and cross-platform arbitrage detection — all through a single API.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get your API key and make your first call in under 5 minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Browse all endpoints with interactive playground.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="MCP Plugin" icon="plug" href="/integrations/mcp/overview">
+    Add Rekko tools to your AI coding assistant in one command.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Pricing" icon="credit-card" href="/pricing">
+    Free tier included. Pay-as-you-go or subscribe.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What you can build
 
-Everything you need to create world-class documentation.
+<CardGroup cols={3}>
+  <Card title="Trading Agents" icon="robot">
+    Autonomous agents that screen markets, generate signals, and execute trades via Kalshi or Polymarket.
+  </Card>
+  <Card title="Portfolio Management" icon="chart-pie">
+    Correlation analysis, Kelly-optimal sizing, and hedge recommendations across your positions.
+  </Card>
+  <Card title="Arbitrage Detection" icon="arrows-left-right">
+    Real-time cross-platform arbitrage scanning with spread scoring and execution guidance.
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## How it works
 
-## Need inspiration?
+<Steps>
+  <Step title="List markets">
+    Browse active prediction markets on Kalshi and Polymarket with live pricing and volume data.
+  </Step>
+  <Step title="Get AI analysis">
+    Trigger deep research that produces probability estimates, confidence scores, and causal factor decomposition.
+  </Step>
+  <Step title="Generate signals">
+    Get actionable trading signals with Kelly-derived position sizing, edge calculation, and risk ratings.
+  </Step>
+  <Step title="Act on insights">
+    Execute trades directly, feed signals to your agent, or monitor via webhooks and SSE streams.
+  </Step>
+</Steps>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Access methods
+
+| Method | Best for | Auth |
+|--------|----------|------|
+| [Direct API](/quickstart) | Full control, any language | Bearer token |
+| [MCP Server](/integrations/mcp/overview) | AI coding assistants | Bearer token via env var |
+| [RapidAPI](/integrations/rapidapi/overview) | Quick prototyping, marketplace billing | RapidAPI key |
+| [x402 Micropayments](/integrations/x402/overview) | Crypto-native agents | USDC on Base L2 |

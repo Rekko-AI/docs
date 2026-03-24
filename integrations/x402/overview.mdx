@@ -1,0 +1,50 @@
+---
+title: x402 Micropayments
+description: Pay per API call with USDC on Base L2 — no subscription required.
+icon: coins
+---
+
+For crypto-native agents and developers, Rekko supports **x402** — the HTTP 402 payment protocol. Pay per request with USDC stablecoins on Base L2 instead of subscribing.
+
+## How it works
+
+1. Make a request without an API key
+2. Rekko returns `HTTP 402 Payment Required` with a payment envelope
+3. Your x402 client automatically pays the USDC amount and retries
+4. The response comes back as normal
+
+## Pricing
+
+Per-call pricing matches the [subscription tiers](/pricing):
+
+| Tier | USDC per call |
+|------|---------------|
+| LISTING | $0.01 |
+| INSIGHT | $0.10 |
+| STRATEGY | $2.00 |
+| DEEP | $5.00 |
+
+## Setup
+
+<Steps>
+  <Step title="Fund a wallet on Base L2">
+    You need a wallet with USDC on [Base](https://base.org) (Coinbase's L2 network). Bridge from Ethereum mainnet or purchase directly.
+  </Step>
+  <Step title="Install an x402 client">
+    Use any x402-compatible HTTP client. The protocol is an open standard.
+  </Step>
+  <Step title="Make requests">
+    Point your client at `https://api.rekko.ai` — payments are handled automatically per request.
+  </Step>
+</Steps>
+
+## When to use x402
+
+- **No subscription commitment** — pay only for what you use
+- **Agent-native** — autonomous agents can self-fund from a wallet
+- **Pseudonymous** — no email signup required
+- **Composable** — works alongside other x402-enabled APIs
+
+## When to use a subscription instead
+
+If you make more than ~100 LISTING calls per month, the [Free tier](/pricing) is more cost-effective. For heavy usage, the [Pro plan](/pricing) ($49/mo) includes thousands of calls.

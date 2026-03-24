@@ -1,0 +1,55 @@
+---
+title: Claude Code Setup
+description: Add Rekko MCP tools to Claude Code.
+---
+
+## Option 1: Plugin install
+
+```bash
+claude plugin install rekko
+```
+
+This registers the MCP server automatically.
+
+## Option 2: Manual configuration
+
+Add to your project's `.mcp.json` or `~/.claude/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "rekko": {
+      "command": "uvx",
+      "args": ["rekko-mcp"],
+      "env": {
+        "REKKO_API_KEY": "rk_free_your_key_here"
+      }
+    }
+  }
+}
+```
+
+## Verify
+
+Start Claude Code and ask a natural language question:
+
+```
+What are the top prediction markets right now?
+```
+
+You should see Rekko tools (`mcp__rekko__list_markets`, etc.) being called automatically.
+
+## Example prompts
+
+- "What are the top prediction markets right now?"
+- "Analyze the Fed rate decision market on Kalshi"
+- "Find arbitrage opportunities above 3% spread"
+- "Screen the top 50 Kalshi markets and analyze anything actionable"
+- "Show my shadow portfolio performance"
+
+## Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `REKKO_API_KEY` | Yes | Your Rekko API key |
+| `REKKO_API_URL` | No | Custom base URL (default: `https://api.rekko.ai`) |

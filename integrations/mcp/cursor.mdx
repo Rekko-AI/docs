@@ -1,0 +1,39 @@
+---
+title: Cursor Setup
+description: Add Rekko MCP tools to Cursor IDE.
+---
+
+## Configure MCP
+
+Add to your project's `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "rekko": {
+      "command": "uvx",
+      "args": ["rekko-mcp"],
+      "env": {
+        "REKKO_API_KEY": "rk_free_your_key_here"
+      }
+    }
+  }
+}
+```
+
+## Verify
+
+Open Cursor's AI chat and ask:
+
+```
+What prediction markets are available on Kalshi right now?
+```
+
+Cursor should invoke `rekko.list_markets` and display the results.
+
+## Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `REKKO_API_KEY` | Yes | Your Rekko API key |
+| `REKKO_API_URL` | No | Custom base URL (default: `https://api.rekko.ai`) |

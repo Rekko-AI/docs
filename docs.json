@@ -1,68 +1,153 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Rekko AI",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#00e87b",
+    "light": "#00e87b",
+    "dark": "#0C8C5E",
+    "background": {
+      "dark": "#0a0a0a"
+    }
   },
   "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "api": {
+    "baseUrl": "https://api.rekko.ai",
+    "auth": {
+      "method": "bearer",
+      "name": "Authorization"
+    },
+    "playground": {
+      "mode": "simple"
+    }
+  },
+  "openapi": ["/openapi.json"],
   "navigation": {
     "tabs": [
       {
         "tab": "Guides",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
               "index",
               "quickstart",
-              "development"
-            ]
-          },
-          {
-            "group": "Customization",
-            "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
-          },
-          {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "authentication",
+              "pricing"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Overview",
             "pages": [
               "api-reference/introduction"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Markets",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api-reference/markets/list-markets",
+              "api-reference/markets/get-market",
+              "api-reference/markets/market-history"
+            ]
+          },
+          {
+            "group": "Insights",
+            "pages": [
+              "api-reference/insights/get-analysis",
+              "api-reference/insights/list-analyses",
+              "api-reference/insights/trigger-analysis",
+              "api-reference/insights/poll-status",
+              "api-reference/insights/screen-markets"
+            ]
+          },
+          {
+            "group": "Strategy",
+            "pages": [
+              "api-reference/strategy/generate-signal",
+              "api-reference/strategy/portfolio-signal",
+              "api-reference/strategy/execution-guidance"
+            ]
+          },
+          {
+            "group": "Deep Intelligence",
+            "pages": [
+              "api-reference/deep/arbitrage",
+              "api-reference/deep/arbitrage-live",
+              "api-reference/deep/correlation",
+              "api-reference/deep/resolution"
+            ]
+          },
+          {
+            "group": "Analytics",
+            "pages": [
+              "api-reference/analytics/calibration",
+              "api-reference/analytics/sentiment",
+              "api-reference/analytics/performance",
+              "api-reference/analytics/performance-history"
+            ]
+          },
+          {
+            "group": "Streaming & Webhooks",
+            "pages": [
+              "api-reference/streaming/sse-stream",
+              "api-reference/streaming/create-webhook",
+              "api-reference/streaming/list-webhooks",
+              "api-reference/streaming/delete-webhook"
+            ]
+          },
+          {
+            "group": "Consensus",
+            "pages": [
+              "api-reference/consensus/report-trade",
+              "api-reference/consensus/get-consensus"
+            ]
+          },
+          {
+            "group": "Customers",
+            "pages": [
+              "api-reference/customers/signup",
+              "api-reference/customers/me"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Integrations",
+        "groups": [
+          {
+            "group": "MCP Server",
+            "pages": [
+              "integrations/mcp/overview",
+              "integrations/mcp/claude-code",
+              "integrations/mcp/cursor",
+              "integrations/mcp/tools-reference"
+            ]
+          },
+          {
+            "group": "RapidAPI",
+            "pages": [
+              "integrations/rapidapi/overview"
+            ]
+          },
+          {
+            "group": "OpenClaw",
+            "pages": [
+              "integrations/openclaw/overview"
+            ]
+          },
+          {
+            "group": "Crypto Payments",
+            "pages": [
+              "integrations/x402/overview"
             ]
           }
         ]
@@ -71,52 +156,33 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
+          "anchor": "API Status",
+          "href": "https://api.rekko.ai/health",
+          "icon": "signal"
         }
       ]
     }
   },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
   "navbar": {
     "links": [
       {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "label": "Dashboard",
+        "href": "https://rekko.ai/dashboard"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "label": "Get API Key",
+      "href": "https://rekko.ai/dashboard"
     }
   },
   "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
+    "options": ["copy", "view", "claude", "cursor", "mcp"]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "x": "https://x.com/rekkoai",
+      "github": "https://github.com/rekko-ai"
     }
   }
 }

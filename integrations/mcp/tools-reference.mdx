@@ -1,0 +1,94 @@
+---
+title: Tools Reference
+description: Complete reference for all Rekko MCP tools.
+---
+
+All tools are available as `mcp__rekko__<tool_name>` in Claude Code or `rekko.<tool_name>` in Cursor.
+
+## Market Intelligence
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `list_markets` | Browse current prediction markets | `source` ("kalshi", "polymarket", ""), `limit` (1-100) |
+| `get_market` | Get details for a single market | `market_id`, `source` (platform hint) |
+| `search_markets` | Search markets by keyword | `query`, `limit` |
+| `get_market_history` | Price history with configurable period | `platform`, `market_id`, `period` ("48h", "7d", "30d"), `max_points` |
+| `get_resolution` | Resolution intelligence for a market | `platform`, `market_id` |
+| `get_execution_guidance` | Execution guidance (spread, slippage, timing) | `platform`, `market_id` |
+
+## Screening & Discovery
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `screen_markets` | Batch screen markets by score, volume, or IDs | `market_ids[]`, `platform`, `min_volume_24h`, `min_score`, `limit` |
+| `get_calibration` | Signal accuracy and calibration metrics | `category`, `period` ("7d", "30d", "all") |
+
+## Deep Research
+
+Analysis takes 30-90 seconds. Use the three-step async pattern:
+
+<Steps>
+  <Step title="Start analysis">
+    Call `analyze_market` with `bet_text` describing the market question. Returns an `analysis_id` immediately.
+  </Step>
+  <Step title="Poll status">
+    Call `check_analysis_status` with the `analysis_id` every 5 seconds until `status` is `"complete"`.
+  </Step>
+  <Step title="Get results">
+    Call `get_analysis` to retrieve the full structured result.
+  </Step>
+</Steps>
+
+For convenience, `get_strategy` runs the entire flow as a single blocking call (30-90s).
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `analyze_market` | Start async analysis pipeline | `bet_text`, `platform` |
+| `check_analysis_status` | Poll analysis completion | `analysis_id` |
+| `get_analysis` | Retrieve completed analysis | `analysis_id` or `market_id` + `platform` |
+| `list_analyses` | List recent analyses | — |
+
+## Strategy & Portfolio
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `get_strategy` | Full analysis + signal (blocking, 30-90s) | `market_query`, `risk_limit` |
+| `get_portfolio_strategy` | Portfolio-aware strategy with position context | `market_query`, `portfolio[]`, `bankroll_usd` |
+| `get_consensus` | Consensus probability from aggregated agent trades | `market_id`, `platform` |
+
+## Arbitrage
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `get_arbitrage` | Cross-platform arbitrage opportunities (cached) | `min_spread` (default 0.02) |
+| `get_arbitrage_live` | Fresh arbitrage scan (10-30s) | `min_spread` |
+
+## Correlation
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `get_correlation` | Cross-market correlation graph | `market_ids[]`, `platform`, `period` |
+
+## Trading
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `place_shadow_trade` | Paper trade for tracking | `ticker`, `side` ("yes"/"no"), `size_usd` |
+| `report_trade` | Report a trade for consensus aggregation | `market_id`, `platform`, `side`, `size_usd`, `price` |
+| `get_portfolio` | Positions and P&L | `mode` ("shadow" or "live") |
+| `get_performance` | Aggregate stats (win rate, ROI) | `mode` |
+| `check_resolutions` | Check for settled markets | `mode` |
+
+## Data Refresh
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `run_scraper` | Refresh market data from a platform | `platform` ("kalshi", "polymarket", "arbitrage") |
+
+## Webhooks
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `create_webhook` | Register a webhook for events | `url`, `events[]`, `secret` |
+| `list_webhooks` | List registered webhooks | — |
+| `delete_webhook` | Remove a webhook | `webhook_id` |

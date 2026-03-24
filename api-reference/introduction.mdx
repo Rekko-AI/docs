@@ -1,33 +1,78 @@
 ---
-title: 'Introduction'
-description: 'Example section for showcasing API endpoints'
+title: API Reference
+description: Complete reference for the Rekko AI prediction market intelligence API.
 ---
 
-<Note>
-  If you're not looking to build API reference documentation, you can delete
-  this section by removing the api-reference folder.
-</Note>
+## Base URL
 
-## Welcome
-
-There are two ways to build API documentation: [OpenAPI](https://mintlify.com/docs/api-playground/openapi/setup) and [MDX components](https://mintlify.com/docs/api-playground/mdx/configuration). For the starter kit, we are using the following OpenAPI specification.
-
-<Card
-  title="Plant Store Endpoints"
-  icon="leaf"
-  href="https://github.com/mintlify/starter/blob/main/api-reference/openapi.json"
->
-  View the OpenAPI specification file
-</Card>
+```
+https://api.rekko.ai/v1
+```
 
 ## Authentication
 
-All API endpoints are authenticated using Bearer tokens and picked up from the specification file.
+All endpoints require a Bearer token. See [Authentication](/authentication) for details.
+
+```bash
+Authorization: Bearer rk_free_your_key_here
+```
+
+## Endpoint tiers
+
+Each endpoint requires a minimum subscription tier.
+
+| Tier | Endpoints | Per-call cost |
+|------|-----------|---------------|
+| **LISTING** | Markets, prices, history | $0.01 |
+| **INSIGHT** | Analysis, screening, resolution | $0.10 |
+| **STRATEGY** | Signals, execution, portfolio | $2.00 |
+| **DEEP** | Arbitrage, correlation, webhooks, streaming | $5.00 |
+
+## Request format
+
+- All request bodies are JSON (`Content-Type: application/json`)
+- Query parameters use standard URL encoding
+- Market identifiers follow the pattern: `{platform}/{market_id}` where `platform` is `kalshi` or `polymarket`
+
+## Response format
+
+All responses are JSON. Successful responses return `200 OK` or `202 Accepted` (for async operations).
+
+## Error responses
+
+| Status | Meaning |
+|--------|---------|
+| `400` | Bad request — invalid parameters |
+| `401` | Unauthorized — missing or invalid API key |
+| `403` | Forbidden — tier too low for this endpoint |
+| `404` | Not found — market or resource doesn't exist |
+| `429` | Too many requests — rate limit or quota exceeded |
+| `502` | Bad gateway — upstream platform unavailable |
+
+Error body:
 
 ```json
-"security": [
-  {
-    "bearerAuth": []
-  }
-]
+{
+  "detail": "Human-readable error message"
+}
 ```
+
+## Async analysis pattern
+
+Analysis endpoints use an async pattern because research pipelines run 30-90 seconds:
+
+1. **Trigger**: `POST /v1/markets/{platform}/{market_id}/analyze` returns `202` with `analysis_id`
+2. **Poll**: `GET .../analyze/{analysis_id}/status` until `status` is `"complete"`
+3. **Retrieve**: `GET /v1/markets/{platform}/{market_id}/analysis` for the full result
+
+## Expandable fields
+
+Many endpoints support `?expand=` to include additional nested data:
+
+| Expansion | Available on | Description |
+|-----------|-------------|-------------|
+| `causal` | Analysis, signals | Causal factor decomposition |
+| `scenarios` | Analysis | Outcome scenario breakdown |
+| `meta` | Analysis | Methodology metadata |
+| `history` | Analysis, markets | Price history |
+| `scoring` | Arbitrage | Spread quality scoring breakdown |

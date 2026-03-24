@@ -1,0 +1,89 @@
+---
+title: Authentication
+description: How to authenticate with the Rekko AI API.
+icon: key
+---
+
+All API requests require authentication. Pass your API key as a Bearer token in the `Authorization` header.
+
+## Bearer token
+
+```bash
+Authorization: Bearer rk_free_your_key_here
+```
+
+<CodeGroup>
+```bash cURL
+curl https://api.rekko.ai/v1/markets \
+  -H "Authorization: Bearer rk_free_your_key_here"
+```
+
+```python Python
+import httpx
+
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer rk_free_your_key_here"},
+)
+
+markets = client.get("/markets").json()
+```
+
+```javascript JavaScript
+const resp = await fetch("https://api.rekko.ai/v1/markets", {
+  headers: { Authorization: "Bearer rk_free_your_key_here" },
+});
+const markets = await resp.json();
+```
+</CodeGroup>
+
+## Key prefixes
+
+| Prefix | Plan |
+|--------|------|
+| `rk_free_` | Free tier |
+| `rk_pro_` | Pro subscription |
+
+## Getting a key
+
+Sign up at the [dashboard](https://rekko.ai/dashboard) or via the API:
+
+```bash
+curl -X POST https://api.rekko.ai/v1/customers/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com", "name": "Your Name"}'
+```
+
+<Warning>
+Your API key is shown **only once** in the signup response. Store it securely.
+</Warning>
+
+## Key rotation
+
+Rotate your key from the [dashboard](https://rekko.ai/dashboard). The old key is revoked immediately.
+
+## Error responses
+
+| Status | Meaning |
+|--------|---------|
+| `401 Unauthorized` | Missing or invalid API key |
+| `403 Forbidden` | Valid key but insufficient tier for this endpoint |
+| `429 Too Many Requests` | Rate limit or monthly quota exceeded |
+
+All errors return JSON:
+
+```json
+{
+  "detail": "Invalid or expired API key"
+}
+```
+
+## Alternative auth methods
+
+### RapidAPI
+
+If you subscribe via [RapidAPI](/integrations/rapidapi/overview), use RapidAPI's standard headers instead of a Bearer token. Rekko validates the `x-rapidapi-proxy-secret` automatically.
+
+### x402 Micropayments
+
+For crypto-native agents, you can pay per-request with USDC on Base L2. See [x402 payments](/integrations/x402/overview).

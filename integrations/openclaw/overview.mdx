@@ -1,0 +1,52 @@
+---
+title: OpenClaw Skills
+description: Use Rekko as an intelligence skill in the OpenClaw agent ecosystem.
+icon: brain
+---
+
+Rekko is available as a **SKILL.md** in the [OpenClaw](https://openclaw.org) ecosystem — an open standard for composable AI agent skills.
+
+## Rekko's role
+
+In the OpenClaw ecosystem, three skills work together for autonomous prediction market trading:
+
+| Skill | Role | What it does |
+|-------|------|-------------|
+| **Rekko** | The Brain | Deep causal research, probability estimates, trading signals |
+| **PolyClaw** | The Hands (Polymarket) | Executes trades on Polymarket via CTF minting + CLOB |
+| **Kalshi Trader** | The Hands (Kalshi) | Executes trades on Kalshi |
+
+Rekko provides the *why* behind market movements. Execution skills handle the *how*.
+
+## Installation
+
+```bash
+npx skills add rekko
+```
+
+This adds the `SKILL.md` to your agent's skill set. Requires `REKKO_API_KEY` in your environment.
+
+## Example workflow
+
+An agent with all three skills can autonomously:
+
+1. **Screen** markets with Rekko (`list_markets`, `screen_markets`)
+2. **Analyze** promising candidates (`get_strategy` — 30-90s blocking call)
+3. **Decide** based on the signal (recommendation, edge, confidence)
+4. **Execute** via PolyClaw (Polymarket) or Kalshi Trader (Kalshi)
+5. **Track** the position (`place_shadow_trade`, `get_portfolio`)
+
+## Thin client principle
+
+The SKILL.md teaches agents how to *consume* Rekko intelligence — how to call tools, interpret responses, and chain with execution skills. All research methodology stays behind the API.
+
+## Learn more
+
+<CardGroup cols={2}>
+  <Card title="MCP Tools Reference" icon="wrench" href="/integrations/mcp/tools-reference">
+    Full list of available tools and parameters.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Direct API access for custom integrations.
+  </Card>
+</CardGroup>

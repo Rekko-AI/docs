@@ -1,0 +1,48 @@
+---
+title: RapidAPI
+description: Access Rekko AI through the RapidAPI marketplace.
+icon: bolt
+---
+
+Rekko AI is available on [RapidAPI](https://rapidapi.com/rekko/api/rekko-ai), the world's largest API marketplace. This is the easiest way to try Rekko if you already use RapidAPI for other services.
+
+## How it works
+
+RapidAPI acts as a proxy between you and `api.rekko.ai`. The endpoints and responses are identical — only the authentication method differs.
+
+## Getting started
+
+<Steps>
+  <Step title="Subscribe on RapidAPI">
+    Visit the [Rekko AI listing on RapidAPI](https://rapidapi.com/rekko/api/rekko-ai) and subscribe to a plan.
+  </Step>
+  <Step title="Test from the playground">
+    Use RapidAPI's built-in playground to test endpoints immediately — no code required.
+  </Step>
+  <Step title="Copy the code snippet">
+    RapidAPI auto-generates code snippets in 20+ languages. Copy the one for your stack.
+  </Step>
+</Steps>
+
+## Authentication
+
+RapidAPI handles authentication automatically. Use the standard RapidAPI headers:
+
+```bash
+curl https://rekko-ai.p.rapidapi.com/v1/markets \
+  -H "x-rapidapi-key: YOUR_RAPIDAPI_KEY" \
+  -H "x-rapidapi-host: rekko-ai.p.rapidapi.com"
+```
+
+## Pricing
+
+RapidAPI manages billing through their platform. Plans mirror the [direct API pricing](/pricing).
+
+## When to use direct API instead
+
+Consider switching to the [direct API](/quickstart) if you:
+
+- Want lower latency (no proxy hop)
+- Need webhook or SSE streaming support
+- Want to use the MCP plugin
+- Prefer per-call x402 micropayments

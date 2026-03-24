@@ -1,0 +1,56 @@
+---
+title: MCP Server
+description: Use Rekko tools natively in AI coding assistants via the Model Context Protocol.
+icon: plug
+---
+
+The `rekko-mcp` package is a thin MCP proxy that gives AI coding assistants (Claude Code, Cursor, Windsurf) native access to all Rekko tools. Every tool call routes to `api.rekko.ai` — no local state or computation.
+
+## What you get
+
+- **25+ MCP tools** integrated natively into your AI assistant
+- **Deep research** — trigger multi-stage analysis pipelines (30-90s)
+- **Arbitrage scanning** — cross-platform Kalshi/Polymarket spread detection
+- **Smart screening** — batch market scoring to find high-value candidates
+- **Shadow trading** — paper trade portfolio with P&L tracking
+- **Strategy signals** — probability estimates, edge assessment, Kelly sizing
+
+## Prerequisites
+
+1. An API key from [rekko.ai](https://rekko.ai/dashboard) (free tier works)
+2. Python 3.10+ with `uv` or `pip`
+
+## Install
+
+```bash
+# Recommended: install and run in one step with uvx
+uvx rekko-mcp
+
+# Or install globally
+pip install rekko-mcp
+```
+
+## Configure your environment
+
+Set your API key as an environment variable:
+
+```bash
+export REKKO_API_KEY=rk_free_your_key_here
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Claude Code Setup" icon="terminal" href="/integrations/mcp/claude-code">
+    Step-by-step configuration for Claude Code.
+  </Card>
+  <Card title="Cursor Setup" icon="arrow-pointer" href="/integrations/mcp/cursor">
+    Configure MCP in Cursor IDE.
+  </Card>
+  <Card title="Tools Reference" icon="wrench" href="/integrations/mcp/tools-reference">
+    Full list of all available MCP tools.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    The same endpoints, accessed directly.
+  </Card>
+</CardGroup>

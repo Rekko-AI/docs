@@ -1,0 +1,63 @@
+---
+title: Pricing
+description: Endpoint tiers, subscription plans, and usage quotas.
+icon: credit-card
+---
+
+## Endpoint tiers
+
+Every endpoint belongs to a tier. Higher tiers unlock deeper intelligence.
+
+| Tier | Per-call cost | What it covers |
+|------|--------------|----------------|
+| **LISTING** | $0.01 | Market listings, prices, history |
+| **INSIGHT** | $0.10 | AI analysis, screening, resolution intelligence |
+| **STRATEGY** | $2.00 | Trading signals, execution guidance, portfolio strategy |
+| **DEEP** | $5.00 | Arbitrage, correlation, webhooks, SSE streaming |
+
+<Tip>
+The `/calibration` endpoint is free and unauthenticated — use it to evaluate Rekko's accuracy before committing.
+</Tip>
+
+## Subscription plans
+
+| | Free | Pro | Enterprise |
+|---|---|---|---|
+| **Price** | $0/mo | $49/mo | Custom |
+| **LISTING calls** | 100/mo | 10,000/mo | Custom |
+| **INSIGHT calls** | 10/mo | 500/mo | Custom |
+| **STRATEGY calls** | — | 50/mo | Custom |
+| **DEEP calls** | — | 10/mo | Custom |
+| **Rate limit** | 30 req/min | 120 req/min | Custom |
+| **Strategy rate limit** | — | 5 req/min | Custom |
+
+### Free tier
+
+Get started immediately with 100 market listing calls and 10 insight calls per month. No credit card required.
+
+### Pro
+
+Upgrade to Pro for full access to trading signals, arbitrage detection, and higher rate limits. Manage your subscription from the [dashboard](https://rekko.ai/dashboard).
+
+### Enterprise
+
+Custom quotas, dedicated support, and SLA. [Contact us](mailto:dan@rekko.ai).
+
+## Monthly quotas
+
+Free tier quotas reset on the **1st of each month** (UTC). When you exceed your quota:
+
+- The API returns `429 Too Many Requests`
+- The `Retry-After` header contains the reset date (ISO 8601)
+- The response body includes a link to upgrade
+
+Check your current usage anytime:
+
+```bash
+curl https://api.rekko.ai/v1/customers/me \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Pay-per-request (x402)
+
+For agents that prefer per-call pricing without a subscription, use [USDC micropayments on Base L2](/integrations/x402/overview). Pricing matches the tier table above.
