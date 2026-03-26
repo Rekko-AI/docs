@@ -12,10 +12,18 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Context7 re-index
+      - name: Refresh docs index
         run: |
           curl -X POST "https://context7.com/api/v1/refresh" \
             -H "Authorization: Bearer ${{ secrets.CONTEXT7_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"libraryName": "/rekko-ai/docs"}'
+        continue-on-error: true
+
+      - name: Refresh OpenAPI index
+        run: |
+          curl -X POST "https://context7.com/api/v1/refresh" \
+            -H "Authorization: Bearer ${{ secrets.CONTEXT7_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"libraryName": "/openapi/api_rekko_ai_openapi_json"}'
         continue-on-error: true
