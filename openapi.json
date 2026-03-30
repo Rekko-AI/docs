@@ -210,7 +210,7 @@
           "Markets"
         ],
         "summary": "List prediction markets",
-        "description": "List current prediction markets with pricing data.",
+        "description": "List current prediction markets with pricing data.\n\nUse ?query= to search by keyword (e.g. ?query=bitcoin).\nUse ?source= to filter by platform.",
         "operationId": "/v1/markets",
         "parameters": [
           {
@@ -219,11 +219,23 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "Filter by platform: 'kalshi' or 'polymarket'",
+              "description": "Filter by platform: 'kalshi', 'polymarket', or 'robinhood'",
               "default": "",
               "title": "Source"
             },
-            "description": "Filter by platform: 'kalshi' or 'polymarket'"
+            "description": "Filter by platform: 'kalshi', 'polymarket', or 'robinhood'"
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Search markets by keyword in title (case-insensitive)",
+              "default": "",
+              "title": "Query"
+            },
+            "description": "Search markets by keyword in title (case-insensitive)"
           },
           {
             "name": "limit",
@@ -1500,13 +1512,13 @@
           "Strategy"
         ],
         "summary": "Scenario analysis \u2014 what-if counterfactual",
-        "description": "Analyze how a hypothetical scenario would affect a market's probability.\n\nStrategy tier ($2.00/call).",
+        "description": "Analyze how a hypothetical scenario would affect a market's probability.\n\nAccepts either JSON body or query parameters. Strategy tier ($2.00/call).",
         "operationId": "/v1/what-if",
         "parameters": [
           {
             "name": "market_query",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "description": "Market question, ticker, or URL",
@@ -1517,7 +1529,7 @@
           {
             "name": "hypothesis",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "description": "Hypothetical scenario to evaluate",
@@ -1538,6 +1550,23 @@
             "description": "Platform hint: 'kalshi' or 'polymarket'"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/_WhatIfRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -4606,6 +4635,32 @@
           "secret": "whsec_abc123def456",
           "url": "https://my-agent.example.com/webhooks/rekko"
         }
+      },
+      "_WhatIfRequest": {
+        "properties": {
+          "market_query": {
+            "type": "string",
+            "title": "Market Query",
+            "description": "Market question, ticker, or URL"
+          },
+          "hypothesis": {
+            "type": "string",
+            "title": "Hypothesis",
+            "description": "Hypothetical scenario to evaluate"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Platform hint: 'kalshi' or 'polymarket'",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_query",
+          "hypothesis"
+        ],
+        "title": "_WhatIfRequest"
       }
     }
   },
