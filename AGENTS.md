@@ -16,7 +16,7 @@
 - Use "forecast" not "bet prediction"
 - Use "traders" not "bettors" or "gamblers"
 - Use "position" not "stake"
-- Use "Kalshi" and "Polymarket" — always capitalized, never abbreviated
+- Use "Kalshi", "Polymarket", and "Robinhood" — always capitalized, never abbreviated
 - Never mention specific AI model names (no "Claude", "Gemini", "GPT") — say "multi-stage research pipeline" or "AI analysis" instead
 
 ## Style preferences

@@ -1,0 +1,364 @@
+---
+title: "Cross-Platform Arbitrage"
+sidebarTitle: "Arbitrage"
+"og:title": "Prediction Market Arbitrage — Find Cross-Platform Price Gaps on Kalshi and Polymarket"
+description: "How to find and exploit prediction market arbitrage between Kalshi and Polymarket. Spread calculation, fee accounting, execution risk, and automated scanning with code examples."
+icon: arrows-left-right
+---
+
+```python
+import httpx
+
+client = httpx.Client(base_url="https://api.rekko.ai/v1", headers={"Authorization": "Bearer YOUR_API_KEY"})
+arbs = client.get("/arbitrage", params={"min_spread": 0.03}).json()
+for opp in arbs["opportunities"]:
+    print(f"{opp['event']} | Spread: {opp['spread_pct']:.1f}% | Cheaper on: {opp['cheaper_on']}")
+```
+
+## What this page covers
+
+- What prediction market arbitrage is and why it exists
+- How to calculate spreads and account for fees
+- Manual cross-platform scanning with Python
+- Automated scanning with the Rekko API
+- Execution risk and practical considerations
+- Real-time alerting via webhooks and SSE
+
+---
+
+## What is prediction market arbitrage?
+
+Prediction market arbitrage occurs when the same event is priced differently on two platforms. If Kalshi prices "Will the Fed cut rates?" at 62 cents YES and Polymarket prices the same event at 68 cents YES, you can buy YES on Kalshi at 62c and buy NO on Polymarket at 32c (1 - 0.68), locking in a 6-cent spread regardless of the outcome.
+
+This happens because Kalshi and Polymarket serve different audiences (regulated US traders vs global crypto traders), have different liquidity pools, and react to news at different speeds.
+
+## Calculating the spread
+
+The basic spread between two platforms:
+
+```
+spread = abs(kalshi_yes_price - polymarket_yes_price)
+spread_pct = spread * 100
+```
+
+A market with Kalshi YES at 0.62 and Polymarket YES at 0.68 has a 6% spread. You profit by buying on the cheaper side and selling on the expensive side.
+
+### Accounting for fees
+
+Raw spreads overstate the opportunity. You need to subtract fees from both sides:
+
+| Platform | Maker fee | Taker fee |
+|----------|-----------|-----------|
+| Kalshi | Free | `0.07 × price × (1 - price)`, max $0.0175 |
+| Polymarket | Varies | Varies, generally low |
+
+```python
+def kalshi_taker_fee(price: float) -> float:
+    """Kalshi taker fee per contract (0-1 price scale)."""
+    return min(0.07 * price * (1 - price), 0.0175)
+
+def net_spread(kalshi_price: float, poly_price: float) -> float:
+    """Net spread after fees on both sides."""
+    raw_spread = abs(kalshi_price - poly_price)
+    fee_kalshi = kalshi_taker_fee(min(kalshi_price, 1 - kalshi_price))
+    fee_poly = 0.01  # Estimate for Polymarket
+    return raw_spread - fee_kalshi - fee_poly
+```
+
+Only pursue opportunities where `net_spread > 0`.
+
+## Manual approach: scanning both APIs
+
+Without a unified API, you need to query both platforms, fuzzy-match events by title, and calculate spreads yourself:
+
+<CodeGroup>
+```python Python
+import httpx
+from difflib import SequenceMatcher
+
+# Fetch from both platforms
+kalshi_resp = httpx.get("https://trading-api.kalshi.com/trade-api/v2/markets", params={"limit": 100})
+kalshi_markets = kalshi_resp.json()["markets"]
+
+poly_resp = httpx.get("https://gamma-api.polymarket.com/markets", params={"limit": 100, "active": True})
+poly_markets = poly_resp.json()
+
+# Fuzzy-match by title
+matches = []
+for km in kalshi_markets:
+    for pm in poly_markets:
+        similarity = SequenceMatcher(None, km["title"].lower(), pm["question"].lower()).ratio()
+        if similarity > 0.6:
+            k_yes = km["yes_bid"] / 100  # Kalshi prices in cents
+            p_yes = float(pm["outcomePrices"][0]) if pm.get("outcomePrices") else None
+            if p_yes is not None:
+                spread = abs(k_yes - p_yes)
+                if spread >= 0.02:
+                    matches.append({
+                        "event": km["title"],
+                        "kalshi_yes": k_yes,
+                        "poly_yes": p_yes,
+                        "spread": spread,
+                    })
+
+matches.sort(key=lambda x: x["spread"], reverse=True)
+for m in matches[:10]:
+    print(f"{m['event']}")
+    print(f"  Kalshi: {m['kalshi_yes']:.2f} | Poly: {m['poly_yes']:.2f} | Spread: {m['spread']:.1%}")
+```
+
+```bash cURL
+# You'd need to fetch from both APIs separately and compare manually
+# Kalshi:
+curl "https://trading-api.kalshi.com/trade-api/v2/markets?limit=100"
+# Polymarket:
+curl "https://gamma-api.polymarket.com/markets?limit=100&active=true"
+```
+
+```javascript JavaScript
+const kalshiResp = await fetch("https://trading-api.kalshi.com/trade-api/v2/markets?limit=100");
+const kalshiMarkets = (await kalshiResp.json()).markets;
+
+const polyResp = await fetch("https://gamma-api.polymarket.com/markets?limit=100&active=true");
+const polyMarkets = await polyResp.json();
+
+// Fuzzy matching would require a library like fuse.js
+// This is significantly more complex than using a unified API
+```
+</CodeGroup>
+
+This approach has problems:
+- Fuzzy matching is unreliable — false positives and missed matches
+- Different title formats across platforms
+- Two separate authentication flows
+- No scoring or ranking of opportunities
+- Must be rebuilt every time either API changes
+
+## Automated approach: Rekko arbitrage API
+
+Rekko handles the cross-platform matching, spread calculation, fee accounting, and scoring:
+
+<CodeGroup>
+```python Python
+import httpx
+
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+
+# Cached scan (instant, refreshed periodically)
+arbs = client.get("/arbitrage", params={"min_spread": 0.02}).json()
+
+print(f"Found {arbs['count']} opportunities (scanned {arbs['scanned_at']})")
+for opp in arbs["opportunities"]:
+    print(f"\n{opp['event']}")
+    print(f"  Kalshi: YES @ {opp['kalshi']['yes_price']:.2f}")
+    print(f"  Polymarket: YES @ {opp['polymarket']['yes_price']:.2f}")
+    print(f"  Spread: {opp['spread_pct']:.1f}% | Score: {opp['score']}")
+    print(f"  Cheaper on: {opp['cheaper_on']}")
+```
+
+```bash cURL
+curl "https://api.rekko.ai/v1/arbitrage?min_spread=0.02" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const resp = await fetch("https://api.rekko.ai/v1/arbitrage?min_spread=0.02", {
+  headers: { Authorization: "Bearer YOUR_API_KEY" },
+});
+const arbs = await resp.json();
+arbs.opportunities.forEach((opp) => {
+  console.log(`${opp.event} | Spread: ${opp.spread_pct.toFixed(1)}% | Score: ${opp.score}`);
+});
+```
+</CodeGroup>
+
+### Live scan
+
+For the freshest data, use the live endpoint (takes 10-30 seconds):
+
+<CodeGroup>
+```python Python
+# Fresh scan — takes 10-30 seconds
+live_arbs = client.get("/arbitrage/live", params={"min_spread": 0.03}).json()
+```
+
+```bash cURL
+curl "https://api.rekko.ai/v1/arbitrage/live?min_spread=0.03" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const liveResp = await fetch("https://api.rekko.ai/v1/arbitrage/live?min_spread=0.03", {
+  headers: { Authorization: "Bearer YOUR_API_KEY" },
+});
+const liveArbs = await liveResp.json();
+```
+</CodeGroup>
+
+### Scoring breakdown
+
+Use `?expand=scoring` to understand why an opportunity ranks high or low:
+
+```python
+arbs = client.get("/arbitrage", params={"min_spread": 0.02, "expand": "scoring"}).json()
+for opp in arbs["opportunities"]:
+    s = opp["scoring"]
+    print(f"{opp['event']} — Overall: {opp['score']}")
+    print(f"  Spread score (40%): {s['spread_score']}")
+    print(f"  Liquidity score (20%): {s['liquidity_score']}")
+    print(f"  Match confidence (20%): {s['match_confidence_score']}")
+    print(f"  Execution score (20%): {s['execution_score']}")
+```
+
+| Score component | Weight | What it measures |
+|----------------|--------|-----------------|
+| Spread score | 40% | Size of the price gap |
+| Liquidity score | 20% | Available depth on both sides |
+| Match confidence | 20% | How certain the event match is |
+| Execution score | 20% | Practical executability |
+
+## Execution risk
+
+Arbitrage in prediction markets is not risk-free. Key risks:
+
+**Execution latency**: Prices move while you place orders on two platforms. The spread can narrow or reverse before both legs fill.
+
+**Liquidity gaps**: The displayed price may not have enough depth for your desired size. Slippage on one leg erodes the spread.
+
+**Settlement mismatch**: Kalshi and Polymarket may resolve the same event differently due to different resolution sources or criteria.
+
+**Capital lockup**: Positions tie up capital until the market resolves, which can be weeks or months. The annualized return may be modest.
+
+**Platform risk**: Crypto-side positions carry smart contract risk. Regulatory-side positions carry compliance risk.
+
+### Mitigation strategies
+
+- Use Rekko's `execution_guidance` endpoint to check spread depth before trading
+- Set a minimum net spread threshold (3-5% after fees) to absorb slippage
+- Start with smaller positions to test execution on both platforms
+- Prefer markets resolving within days rather than months for better capital efficiency
+
+## Real-time alerting
+
+### Webhooks
+
+Register a webhook to get notified when new arbitrage opportunities appear:
+
+<CodeGroup>
+```python Python
+# Register a webhook for arbitrage events
+webhook = client.post("/webhooks", json={
+    "url": "https://your-server.com/webhook",
+    "events": ["price_shift"],
+    "secret": "your_hmac_secret",
+}).json()
+print(f"Webhook ID: {webhook['webhook_id']}")
+```
+
+```bash cURL
+curl -X POST "https://api.rekko.ai/v1/webhooks" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://your-server.com/webhook", "events": ["price_shift"], "secret": "your_secret"}'
+```
+
+```javascript JavaScript
+const webhook = await fetch("https://api.rekko.ai/v1/webhooks", {
+  method: "POST",
+  headers: { Authorization: "Bearer YOUR_API_KEY", "Content-Type": "application/json" },
+  body: JSON.stringify({
+    url: "https://your-server.com/webhook",
+    events: ["price_shift"],
+    secret: "your_hmac_secret",
+  }),
+}).then((r) => r.json());
+```
+</CodeGroup>
+
+### SSE streaming
+
+For real-time, subscribe to the price shift stream:
+
+```python
+import httpx
+
+with httpx.stream("GET", "https://api.rekko.ai/v1/stream",
+    params={"events": "price_shift"},
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+) as response:
+    for line in response.iter_lines():
+        if line:
+            event = json.loads(line)
+            if event["type"] == "price_shift":
+                print(f"Price move: {event['market_id']} — {event['old_yes']} → {event['new_yes']}")
+```
+
+## Complete arbitrage scanner
+
+A runnable script that checks for arbitrage and reports findings:
+
+```python
+"""Prediction market arbitrage scanner using Rekko API."""
+import httpx
+import json
+from datetime import datetime
+
+API_KEY = "YOUR_API_KEY"
+
+def scan_arbitrage(min_spread: float = 0.03) -> list:
+    """Scan for cross-platform arbitrage opportunities."""
+    client = httpx.Client(
+        base_url="https://api.rekko.ai/v1",
+        headers={"Authorization": f"Bearer {API_KEY}"},
+        timeout=60.0,
+    )
+
+    arbs = client.get("/arbitrage", params={
+        "min_spread": min_spread,
+        "expand": "scoring",
+    }).json()
+
+    print(f"[{datetime.now():%H:%M}] Scanned — {arbs['count']} opportunities above {min_spread:.0%} spread\n")
+
+    for opp in arbs["opportunities"]:
+        kalshi_yes = opp["kalshi"]["yes_price"]
+        poly_yes = opp["polymarket"]["yes_price"]
+        print(f"  {opp['event']}")
+        print(f"    Kalshi YES: {kalshi_yes:.2f} | Polymarket YES: {poly_yes:.2f}")
+        print(f"    Spread: {opp['spread_pct']:.1f}% | Score: {opp['score']}")
+        print(f"    Action: Buy YES on {opp['cheaper_on']}, buy NO on the other")
+        print()
+
+    return arbs["opportunities"]
+
+if __name__ == "__main__":
+    opportunities = scan_arbitrage(min_spread=0.03)
+    if not opportunities:
+        print("  No opportunities above threshold. Try lowering min_spread.")
+```
+
+## What's next
+
+<CardGroup cols={3}>
+  <Card title="Build a trading bot" icon="robot" href="/docs/guides/build-trading-bot-python">
+    End-to-end bot with screening, analysis, and execution.
+  </Card>
+  <Card title="Kelly criterion sizing" icon="calculator" href="/docs/guides/kelly-criterion-position-sizing">
+    Optimal position sizing for prediction market positions.
+  </Card>
+  <Card title="Webhooks and streaming" icon="bolt" href="/docs/guides/webhooks-streaming">
+    Real-time alerts for price shifts and new opportunities.
+  </Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title="Arbitrage API reference" icon="book" href="/docs/api-reference/deep/arbitrage">
+    Full endpoint documentation for cached and live arbitrage.
+  </Card>
+  <Card title="Correlation analysis" icon="chart-network" href="/docs/api-reference/deep/correlation">
+    Cross-market correlation for portfolio diversification.
+  </Card>
+</CardGroup>

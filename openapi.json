@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Rekko AI \u2014 Prediction Market Intelligence",
-    "description": "The brain for prediction market trading. Deep AI research, Bayesian causal decomposition, portfolio-aware strategy signals, cross-platform arbitrage, and execution guidance \u2014 all in one API. Covers Kalshi and Polymarket. Clean flat JSON designed for developers and autonomous trading agents.",
+    "description": "The brain for prediction market trading. Deep AI research, Bayesian causal decomposition, portfolio-aware strategy signals, cross-platform arbitrage, and execution guidance \u2014 all in one API. Covers Kalshi, Polymarket, and Robinhood. Clean flat JSON designed for developers and autonomous trading agents.",
     "contact": {
       "name": "Rekko AI",
       "url": "https://rekko.ai/"
@@ -12,6 +12,11 @@
     },
     "version": "1.0.0"
   },
+  "servers": [
+    {
+      "url": "https://api.rekko.ai"
+    }
+  ],
   "paths": {
     "/health": {
       "get": {
@@ -35,13 +40,33 @@
         }
       }
     },
+    "/.well-known/mcp/server-card.json": {
+      "get": {
+        "summary": "Mcp Server Card",
+        "operationId": "/.well-known/mcp/server-card.json",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response /.Well-Known/Mcp/Server-Card.Json"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "tags": [
           "Analytics"
         ],
         "summary": "Health check",
-        "description": "Health check with data freshness metrics.",
+        "description": "Health check with data freshness and platform coverage stats.",
         "operationId": "/v1/health",
         "responses": {
           "200": {
@@ -76,6 +101,30 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response /V1/Pricing"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metrics": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Acquisition-readiness metrics dashboard",
+        "description": "Internal metrics for tracking acquisition-readiness KPIs.\n\nReturns active developers, monthly API calls, calls by tier/auth method,\nand platform coverage. Admin access only.",
+        "operationId": "/v1/metrics",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response /V1/Metrics"
                 }
               }
             }
@@ -234,6 +283,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "kalshi"
+              ],
               "title": "Platform"
             }
           },
@@ -243,6 +295,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "KXAGICO-COMP-28Q1"
+              ],
               "title": "Market Id"
             }
           },
@@ -298,6 +353,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "kalshi"
+              ],
               "title": "Platform"
             }
           },
@@ -307,6 +365,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "KXAGICO-COMP-28Q1"
+              ],
               "title": "Market Id"
             }
           },
@@ -378,6 +439,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "kalshi"
+              ],
               "title": "Platform"
             }
           },
@@ -387,6 +451,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "KXAGICO-COMP-28Q1"
+              ],
               "title": "Market Id"
             }
           }
@@ -430,6 +497,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "kalshi"
+              ],
               "title": "Platform"
             }
           },
@@ -439,6 +509,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "KXAGICO-COMP-28Q1"
+              ],
               "title": "Market Id"
             }
           }
@@ -482,6 +555,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "kalshi"
+              ],
               "title": "Platform"
             }
           },
@@ -491,6 +567,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "KXAGICO-COMP-28Q1"
+              ],
               "title": "Market Id"
             }
           },
@@ -598,6 +677,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "kalshi"
+              ],
               "title": "Platform"
             }
           },
@@ -607,6 +689,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "KXAGICO-COMP-28Q1"
+              ],
               "title": "Market Id"
             }
           }
@@ -650,6 +735,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "kalshi"
+              ],
               "title": "Platform"
             }
           },
@@ -659,6 +747,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "KXAGICO-COMP-28Q1"
+              ],
               "title": "Market Id"
             }
           },
@@ -668,6 +759,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "rk-a1b2c3d4e5f6"
+              ],
               "title": "Analysis Id"
             }
           }
@@ -1071,6 +1165,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "kalshi"
+              ],
               "title": "Platform"
             }
           },
@@ -1080,6 +1177,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "KXAGICO-COMP-28Q1"
+              ],
               "title": "Market Id"
             }
           },
@@ -1201,6 +1301,9 @@
             "required": true,
             "schema": {
               "type": "string",
+              "examples": [
+                "wh-abc123"
+              ],
               "title": "Webhook Id"
             }
           }
@@ -1391,48 +1494,48 @@
         }
       }
     },
-    "/v1/customers/me": {
-      "get": {
+    "/v1/what-if": {
+      "post": {
         "tags": [
-          "Customers"
+          "Strategy"
         ],
-        "summary": "Get Customer Me",
-        "description": "Get the authenticated customer's profile and usage stats.\n\nUses the customer's own API key for auth \u2014 no internal key needed.",
-        "operationId": "/v1/customers/me",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response /V1/Customers/Me"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/customers/profile": {
-      "get": {
-        "tags": [
-          "Customers"
-        ],
-        "summary": "Get Customer Profile",
-        "description": "Get customer profile and monthly usage. Requires internal key.",
-        "operationId": "/v1/customers/profile",
+        "summary": "Scenario analysis \u2014 what-if counterfactual",
+        "description": "Analyze how a hypothetical scenario would affect a market's probability.\n\nStrategy tier ($2.00/call).",
+        "operationId": "/v1/what-if",
         "parameters": [
           {
-            "name": "customer_id",
+            "name": "market_query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Market question, ticker, or URL",
+              "title": "Market Query"
+            },
+            "description": "Market question, ticker, or URL"
+          },
+          {
+            "name": "hypothesis",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Hypothetical scenario to evaluate",
+              "title": "Hypothesis"
+            },
+            "description": "Hypothetical scenario to evaluate"
+          },
+          {
+            "name": "platform",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string",
+              "description": "Platform hint: 'kalshi' or 'polymarket'",
               "default": "",
-              "title": "Customer Id"
-            }
+              "title": "Platform"
+            },
+            "description": "Platform hint: 'kalshi' or 'polymarket'"
           }
         ],
         "responses": {
@@ -1443,7 +1546,7 @@
                 "schema": {
                   "type": "object",
                   "additionalProperties": true,
-                  "title": "Response /V1/Customers/Profile"
+                  "title": "Response /V1/What-If"
                 }
               }
             }
@@ -1454,120 +1557,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/customers/signup": {
-      "post": {
-        "tags": [
-          "Customers"
-        ],
-        "summary": "Signup",
-        "description": "Create a free-tier account. Returns a one-time API key.",
-        "operationId": "/v1/customers/signup",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SignupRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SignupResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/customers/upsert": {
-      "post": {
-        "tags": [
-          "Customers"
-        ],
-        "summary": "Upsert Customer Admin",
-        "description": "Upsert a customer record. Requires internal key.",
-        "operationId": "/v1/customers/upsert",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response /V1/Customers/Upsert"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/customers/reset": {
-      "post": {
-        "tags": [
-          "Customers"
-        ],
-        "summary": "Reset Customer",
-        "description": "Reset a customer's API key (re-provision on next signup). Requires internal key.",
-        "operationId": "/v1/customers/reset",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response /V1/Customers/Reset"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/webhooks/stripe": {
-      "post": {
-        "tags": [
-          "Customers"
-        ],
-        "summary": "Stripe Webhook",
-        "description": "Handle Stripe subscription lifecycle events.\n\nUnauthenticated but verified via Stripe webhook signing secret.",
-        "operationId": "/v1/webhooks/stripe",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response /V1/Webhooks/Stripe"
                 }
               }
             }
@@ -1583,7 +1572,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi or polymarket"
+            "description": "kalshi, polymarket, or robinhood"
           },
           "market_id": {
             "type": "string",
@@ -1808,18 +1797,98 @@
             "title": "Duration Ms",
             "description": "How long the analysis took",
             "default": 0
+          },
+          "ensemble_probability": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ensemble Probability",
+            "description": "Aggregated probability from multi-model ensemble"
+          },
+          "ensemble_estimates": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ensemble Estimates",
+            "description": "Per-model probability estimates from ensemble"
+          },
+          "ensemble_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ensemble Method",
+            "description": "Ensemble aggregation method used"
+          },
+          "ensemble_disagreement": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ensemble Disagreement",
+            "description": "Std dev across ensemble models (0 = full agreement)"
+          },
+          "raw_probability": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Probability",
+            "description": "Pre-calibration probability (before Platt scaling)"
+          },
+          "calibration_applied": {
+            "type": "boolean",
+            "title": "Calibration Applied",
+            "description": "Whether post-hoc Platt scaling was applied",
+            "default": false
           }
         },
         "type": "object",
         "title": "AnalysisMeta",
         "description": "Internal metadata about how an analysis was produced (opt-in via ?expand=meta).",
         "example": {
+          "calibration_applied": true,
           "duration_ms": 42300,
           "edge_assessment": "Market at 62c implies 62% probability. Our 71% estimate gives +9c edge \u2014 significant at this confidence level.",
+          "ensemble_disagreement": 0.04,
+          "ensemble_method": "trimmed_median",
+          "ensemble_probability": 0.72,
           "models_used": [
             "gemini-3.1-pro-preview",
             "claude-sonnet-4-5"
           ],
+          "raw_probability": 0.7,
           "what_would_change_mind": [
             "CPI surprise above 2.5%",
             "Strong employment report (NFP > 250K)",
@@ -1929,7 +1998,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi or polymarket"
+            "description": "kalshi, polymarket, or robinhood"
           },
           "market_id": {
             "type": "string",
@@ -2712,7 +2781,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi or polymarket"
+            "description": "kalshi, polymarket, or robinhood"
           },
           "title": {
             "type": "string",
@@ -3007,7 +3076,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi or polymarket"
+            "description": "kalshi, polymarket, or robinhood"
           },
           "market_id": {
             "type": "string",
@@ -3371,7 +3440,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi or polymarket"
+            "description": "kalshi, polymarket, or robinhood"
           },
           "market_id": {
             "type": "string",
@@ -3420,7 +3489,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi or polymarket"
+            "description": "kalshi, polymarket, or robinhood"
           },
           "market_id": {
             "type": "string",
@@ -3619,7 +3688,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi or polymarket"
+            "description": "kalshi, polymarket, or robinhood"
           },
           "title": {
             "type": "string",
@@ -3777,7 +3846,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "Filter by platform: 'kalshi' or 'polymarket'",
+            "description": "Filter by platform: 'kalshi', 'polymarket', or 'robinhood'",
             "default": ""
           },
           "min_volume_24h": {
@@ -3819,7 +3888,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi or polymarket"
+            "description": "kalshi, polymarket, or robinhood"
           },
           "market_id": {
             "type": "string",
@@ -4086,7 +4155,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi or polymarket"
+            "description": "kalshi, polymarket, or robinhood"
           },
           "market_id": {
             "type": "string",
@@ -4238,7 +4307,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "Filter by platform: 'kalshi' or 'polymarket'",
+            "description": "Filter by platform: 'kalshi', 'polymarket', or 'robinhood'",
             "default": ""
           },
           "market_id": {
@@ -4270,52 +4339,6 @@
           "platform": "kalshi"
         }
       },
-      "SignupRequest": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "title": "Email",
-            "description": "Customer email address"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Customer display name",
-            "default": ""
-          }
-        },
-        "type": "object",
-        "required": [
-          "email"
-        ],
-        "title": "SignupRequest"
-      },
-      "SignupResponse": {
-        "properties": {
-          "api_key": {
-            "type": "string",
-            "title": "Api Key",
-            "description": "API key (shown once \u2014 save it now)"
-          },
-          "customer_id": {
-            "type": "string",
-            "title": "Customer Id",
-            "description": "Customer ID"
-          },
-          "plan": {
-            "type": "string",
-            "title": "Plan",
-            "description": "Plan tier"
-          }
-        },
-        "type": "object",
-        "required": [
-          "api_key",
-          "customer_id",
-          "plan"
-        ],
-        "title": "SignupResponse"
-      },
       "TopMover": {
         "properties": {
           "market_id": {
@@ -4326,7 +4349,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi or polymarket"
+            "description": "kalshi, polymarket, or robinhood"
           },
           "title": {
             "type": "string",
@@ -4605,7 +4628,7 @@
     },
     {
       "name": "Arbitrage",
-      "description": "Cross-platform arbitrage detection (Kalshi vs Polymarket)"
+      "description": "Cross-platform arbitrage detection (Kalshi vs Polymarket vs Robinhood)"
     },
     {
       "name": "Analytics",

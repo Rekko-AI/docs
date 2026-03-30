@@ -1,0 +1,740 @@
+---
+title: "Polymarket API Guide"
+sidebarTitle: "Polymarket API"
+"og:title": "Polymarket API Developer Guide 2026 — CLOB, py-clob-client, REST Endpoints, and Python Examples"
+description: "Complete guide to the Polymarket prediction market API. CLOB order book, Gamma Markets API, py-clob-client SDK, condition IDs, authentication, and how to add AI analysis."
+icon: chart-scatter
+---
+
+```python
+import httpx
+
+# Fetch the top Polymarket markets by 24-hour volume
+resp = httpx.get("https://gamma-api.polymarket.com/markets", params={
+    "limit": 10,
+    "active": True,
+    "order": "volume24hr",
+    "ascending": False,
+})
+
+for market in resp.json():
+    yes_price = market["outcomePrices"][0] if market.get("outcomePrices") else "N/A"
+    print(f"{market['question']} | YES: {yes_price} | Vol: ${float(market.get('volume24hr', 0)):,.0f}")
+```
+
+## What this page covers
+
+- **Architecture** — Two separate APIs (Gamma for discovery, CLOB for trading) and when to use each
+- **Authentication** — HMAC-SHA256 signing for the CLOB API, public access for Gamma
+- **py-clob-client SDK** — Official Python SDK installation, setup, and usage
+- **Core endpoints** — Market listing, order books, placing orders, and positions
+- **Data model** — Condition IDs, token IDs, and how they relate to each other
+- **Rate limits and fees** — What to expect when building on Polymarket
+- **Gaps in the raw API** — What Polymarket doesn't give you and how to fill those gaps
+
+---
+
+## Overview
+
+Polymarket is the largest crypto-native prediction market by trading volume, built on the Polygon blockchain. Markets settle in USDC, outcomes are binary (Yes/No), and prices represent implied probabilities -- a Yes price of $0.65 means the market prices the event at 65% likely.
+
+Key architectural facts:
+
+- **Order matching** — Central Limit Order Book (CLOB), not AMM
+- **Market identifiers** — condition IDs (hex strings) for events, token IDs for individual outcomes
+- **Two separate APIs** — Gamma (discovery/metadata, public) and CLOB (trading, authenticated)
+
+If you just need normalized market data across platforms without dealing with two APIs and HMAC signing, see the [Rekko Markets API](/api-reference/markets/list-markets).
+
+---
+
+## Architecture: two APIs
+
+Polymarket splits its API into two completely separate services. Understanding which one to use for what is the first thing that trips up most developers.
+
+### Gamma Markets API
+
+**Base URL:** `https://gamma-api.polymarket.com`
+
+The Gamma API is the read-only discovery layer. Use it to browse markets, get metadata, and check prices.
+
+| Aspect | Detail |
+|--------|--------|
+| Authentication | None required |
+| Purpose | Market discovery, metadata, prices, volume |
+| Rate limits | No published limit (reasonable use expected) |
+| Data freshness | Near real-time |
+
+### CLOB API
+
+**Base URL:** `https://clob.polymarket.com`
+
+The CLOB API handles all trading operations. It requires API key authentication with HMAC-SHA256 request signing.
+
+| Aspect | Detail |
+|--------|--------|
+| Authentication | API key + HMAC-SHA256 signature |
+| Purpose | Order placement, cancellation, positions, order book depth |
+| Rate limits | Varies by endpoint |
+| Settlement | USDC on Polygon (chain ID 137) |
+
+<Tip>
+If you only need to read market data and prices, you can skip CLOB authentication entirely and use the Gamma API.
+</Tip>
+
+### Choosing the right API
+
+| Task | API | Auth required |
+|------|-----|---------------|
+| List markets | Gamma | No |
+| Get current prices | Gamma | No |
+| Check market volume | Gamma | No |
+| Get order book depth | CLOB | Yes |
+| Place a limit order | CLOB | Yes |
+| Cancel an order | CLOB | Yes |
+| View open positions | CLOB | Yes |
+| Check trade history | CLOB | Yes |
+
+---
+
+## Authentication
+
+### Gamma API (no auth)
+
+Public endpoints require no authentication. Just make the request:
+
+<CodeGroup>
+```bash cURL
+curl "https://gamma-api.polymarket.com/markets?limit=5&active=true"
+```
+
+```python Python
+import httpx
+
+resp = httpx.get("https://gamma-api.polymarket.com/markets", params={
+    "limit": 5,
+    "active": True,
+})
+markets = resp.json()
+```
+
+```javascript JavaScript
+const resp = await fetch(
+  "https://gamma-api.polymarket.com/markets?limit=5&active=true"
+);
+const markets = await resp.json();
+```
+</CodeGroup>
+
+### CLOB API (HMAC-SHA256)
+
+Trading endpoints require three headers on every request: your API key, a Unix timestamp, and an HMAC-SHA256 signature over the request details.
+
+You generate API credentials from your Polymarket account. The secret is used to sign requests but is never sent over the wire.
+
+<CodeGroup>
+```bash cURL
+TIMESTAMP=$(date +%s)
+METHOD="GET"
+PATH="/markets"
+BODY=""
+MESSAGE="${TIMESTAMP}${METHOD}${PATH}${BODY}"
+SIGNATURE=$(echo -n "$MESSAGE" | openssl dgst -sha256 -hmac "$POLYMARKET_SECRET" | cut -d' ' -f2)
+
+curl "https://clob.polymarket.com/markets" \
+  -H "POLY-API-KEY: $POLYMARKET_API_KEY" \
+  -H "POLY-TIMESTAMP: $TIMESTAMP" \
+  -H "POLY-SIGNATURE: $SIGNATURE"
+```
+
+```python Python
+import hmac
+import hashlib
+import time
+import httpx
+
+API_KEY = "YOUR_POLYMARKET_API_KEY"
+API_SECRET = "YOUR_POLYMARKET_SECRET"
+
+def sign_request(method: str, path: str, body: str = "") -> dict:
+    timestamp = str(int(time.time()))
+    message = f"{timestamp}{method}{path}{body}"
+    signature = hmac.new(
+        API_SECRET.encode(),
+        message.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+    return {
+        "POLY-API-KEY": API_KEY,
+        "POLY-TIMESTAMP": timestamp,
+        "POLY-SIGNATURE": signature,
+    }
+
+# Example: get order book
+headers = sign_request("GET", "/book")
+resp = httpx.get("https://clob.polymarket.com/book", headers=headers, params={
+    "token_id": "YOUR_TOKEN_ID",
+})
+book = resp.json()
+```
+
+```javascript JavaScript
+const crypto = require("crypto");
+
+const API_KEY = "YOUR_POLYMARKET_API_KEY";
+const API_SECRET = "YOUR_POLYMARKET_SECRET";
+
+function signRequest(method, path, body = "") {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const message = `${timestamp}${method}${path}${body}`;
+  const signature = crypto
+    .createHmac("sha256", API_SECRET)
+    .update(message)
+    .digest("hex");
+
+  return {
+    "POLY-API-KEY": API_KEY,
+    "POLY-TIMESTAMP": timestamp,
+    "POLY-SIGNATURE": signature,
+  };
+}
+
+// Example: get order book
+const headers = signRequest("GET", "/book");
+const resp = await fetch(
+  "https://clob.polymarket.com/book?token_id=YOUR_TOKEN_ID",
+  { headers }
+);
+const book = await resp.json();
+```
+</CodeGroup>
+
+---
+
+## py-clob-client SDK
+
+Polymarket publishes an official Python SDK that wraps the CLOB API and handles authentication, order signing, and the Conditional Token Framework (CTF) interactions.
+
+### Installation
+
+```bash
+pip install py-clob-client
+```
+
+### Setup
+
+```python
+from py_clob_client.client import ClobClient
+
+client = ClobClient(
+    host="https://clob.polymarket.com",
+    key="YOUR_API_KEY",
+    chain_id=137,  # Polygon mainnet
+)
+```
+
+### Common operations
+
+```python
+# List available markets
+markets = client.get_markets()
+
+# Get order book for a specific token
+book = client.get_order_book(token_id="YOUR_TOKEN_ID")
+print(f"Best bid: {book.bids[0].price if book.bids else 'none'}")
+print(f"Best ask: {book.asks[0].price if book.asks else 'none'}")
+
+# Place a limit buy order
+order = client.create_and_post_order(
+    token_id="YOUR_TOKEN_ID",
+    price=0.65,      # Price per share in USDC
+    size=100,         # Number of shares
+    side="BUY",
+)
+print(f"Order ID: {order['orderID']}")
+
+# Cancel an order
+client.cancel(order_id="YOUR_ORDER_ID")
+
+# Get open orders
+open_orders = client.get_orders()
+
+# Get positions
+positions = client.get_positions()
+```
+
+<Warning>
+Trading on Polymarket requires USDC on the Polygon network and CTF (Conditional Token Framework) approval. The SDK handles CTF interactions, but you must have funded your Polygon wallet with USDC first.
+</Warning>
+
+---
+
+## Core endpoints
+
+### List markets (Gamma API)
+
+Fetch active markets sorted by volume. No authentication required.
+
+<CodeGroup>
+```bash cURL
+curl "https://gamma-api.polymarket.com/markets?limit=10&active=true&order=volume24hr&ascending=false"
+```
+
+```python Python
+import httpx
+
+resp = httpx.get("https://gamma-api.polymarket.com/markets", params={
+    "limit": 10,
+    "active": True,
+    "order": "volume24hr",
+    "ascending": False,
+})
+markets = resp.json()
+
+for m in markets:
+    prices = m.get("outcomePrices", [])
+    yes_price = prices[0] if prices else "N/A"
+    print(f"{m['question']} | YES: {yes_price}")
+```
+
+```javascript JavaScript
+const resp = await fetch(
+  "https://gamma-api.polymarket.com/markets?" +
+    new URLSearchParams({
+      limit: "10",
+      active: "true",
+      order: "volume24hr",
+      ascending: "false",
+    })
+);
+const markets = await resp.json();
+
+markets.forEach((m) => {
+  const yesPrice = m.outcomePrices?.[0] ?? "N/A";
+  console.log(`${m.question} | YES: ${yesPrice}`);
+});
+```
+</CodeGroup>
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | integer | Max results to return |
+| `active` | boolean | Filter to active markets |
+| `order` | string | Sort field (`volume24hr`, `volume`, `liquidity`, `endDate`) |
+| `ascending` | boolean | Sort direction |
+| `tag` | string | Filter by category tag |
+
+### Get a market by slug (Gamma API)
+
+```python
+import httpx
+
+slug = "will-bitcoin-hit-100k-2026"
+resp = httpx.get(f"https://gamma-api.polymarket.com/markets/{slug}")
+market = resp.json()
+print(f"{market['question']} — condition: {market['conditionId']}")
+```
+
+### Get order book (CLOB API)
+
+Returns the full order book for a token. Requires HMAC authentication.
+
+<CodeGroup>
+```bash cURL
+# See authentication section for $HEADERS
+curl "https://clob.polymarket.com/book?token_id=YOUR_TOKEN_ID" \
+  -H "POLY-API-KEY: $POLYMARKET_API_KEY" \
+  -H "POLY-TIMESTAMP: $TIMESTAMP" \
+  -H "POLY-SIGNATURE: $SIGNATURE"
+```
+
+```python Python
+import httpx
+
+# Using the sign_request helper from the authentication section
+headers = sign_request("GET", "/book")
+resp = httpx.get("https://clob.polymarket.com/book", headers=headers, params={
+    "token_id": "YOUR_TOKEN_ID",
+})
+book = resp.json()
+
+print("Bids:")
+for bid in book.get("bids", [])[:5]:
+    print(f"  ${bid['price']} x {bid['size']}")
+
+print("Asks:")
+for ask in book.get("asks", [])[:5]:
+    print(f"  ${ask['price']} x {ask['size']}")
+```
+
+```javascript JavaScript
+// Using the signRequest helper from the authentication section
+const headers = signRequest("GET", "/book");
+const resp = await fetch(
+  "https://clob.polymarket.com/book?token_id=YOUR_TOKEN_ID",
+  { headers }
+);
+const book = await resp.json();
+
+console.log("Bids:");
+book.bids?.slice(0, 5).forEach((b) => {
+  console.log(`  $${b.price} x ${b.size}`);
+});
+```
+</CodeGroup>
+
+**Response structure:**
+
+```json
+{
+  "bids": [
+    { "price": "0.65", "size": "500" },
+    { "price": "0.64", "size": "1200" }
+  ],
+  "asks": [
+    { "price": "0.66", "size": "300" },
+    { "price": "0.67", "size": "800" }
+  ]
+}
+```
+
+### Get positions (CLOB API)
+
+```python
+headers = sign_request("GET", "/positions")
+resp = httpx.get("https://clob.polymarket.com/positions", headers=headers)
+positions = resp.json()
+
+for pos in positions:
+    print(f"Token: {pos['asset']['token_id']} | Size: {pos['size']} | Avg: ${pos['avg_price']}")
+```
+
+---
+
+## Market data format
+
+The Gamma API returns market objects with these key fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `question` | string | The market question (e.g., "Will Bitcoin exceed $100k in 2026?") |
+| `conditionId` | string | Hex condition ID — primary identifier for the event |
+| `slug` | string | URL-safe slug for the market page |
+| `outcomes` | string[] | Outcome labels, typically `["Yes", "No"]` |
+| `outcomePrices` | string[] | Current prices per outcome (e.g., `["0.65", "0.35"]`) |
+| `volume` | string | Total lifetime volume in USDC |
+| `volume24hr` | number | Rolling 24-hour trading volume |
+| `liquidity` | string | Available liquidity in the order book |
+| `endDate` | string | ISO 8601 resolution date |
+| `active` | boolean | Whether trading is currently open |
+| `description` | string | Markdown description of the market and resolution criteria |
+| `tags` | string[] | Category tags (e.g., `["politics", "elections"]`) |
+| `clobTokenIds` | string[] | CLOB token IDs for each outcome |
+
+**Example response:**
+
+```json
+{
+  "question": "Will the Fed cut rates in Q2 2026?",
+  "conditionId": "0xabc123...def456",
+  "slug": "will-the-fed-cut-rates-q2-2026",
+  "outcomes": ["Yes", "No"],
+  "outcomePrices": ["0.62", "0.38"],
+  "volume": "2450000",
+  "volume24hr": 185000,
+  "liquidity": "340000",
+  "endDate": "2026-06-30T23:59:59Z",
+  "active": true,
+  "clobTokenIds": ["0x111...aaa", "0x222...bbb"]
+}
+```
+
+---
+
+## Condition IDs and token IDs
+
+This is the concept that confuses most developers new to Polymarket. There are two types of identifiers, and they serve different purposes.
+
+### Condition ID
+
+The **condition ID** identifies an event (market). It's a hex string derived from the market's oracle and question parameters.
+
+- One per market
+- Used in the Gamma API to look up metadata
+- Does not appear in trading requests
+
+### Token ID
+
+Each market outcome has a **token ID**. A standard binary market has two token IDs: one for Yes, one for No.
+
+- Used in the CLOB API for trading and order book queries
+- Tied to ERC-1155 tokens on Polygon
+- Found in the Gamma API `clobTokenIds` array
+
+### How they relate
+
+```
+Market (condition ID: 0xabc...123)
+  |
+  +-- Yes outcome (token ID: 0x111...aaa)
+  |
+  +-- No outcome (token ID: 0x222...bbb)
+```
+
+To go from discovery to trading:
+
+1. Browse markets via the Gamma API (get the `conditionId`)
+2. Extract the `clobTokenIds` from the Gamma response
+3. Use the token ID for the outcome you want in CLOB API trading calls
+
+```python
+import httpx
+
+# 1. Discover a market
+resp = httpx.get("https://gamma-api.polymarket.com/markets", params={
+    "limit": 1, "active": True, "order": "volume24hr", "ascending": False,
+})
+market = resp.json()[0]
+condition_id = market["conditionId"]
+yes_token_id = market["clobTokenIds"][0]  # Index 0 = Yes outcome
+no_token_id = market["clobTokenIds"][1]   # Index 1 = No outcome
+
+print(f"Market: {market['question']}")
+print(f"Condition ID: {condition_id}")
+print(f"Yes token: {yes_token_id}")
+print(f"No token: {no_token_id}")
+
+# 2. Get order book for the Yes outcome
+headers = sign_request("GET", "/book")
+book = httpx.get("https://clob.polymarket.com/book", headers=headers, params={
+    "token_id": yes_token_id,
+}).json()
+```
+
+---
+
+## Rate limits and fees
+
+### Rate limits
+
+| API | Limit | Notes |
+|-----|-------|-------|
+| Gamma (public reads) | No published limit | Polymarket expects reasonable usage; aggressive polling may be throttled |
+| CLOB (authenticated) | Varies by endpoint | Order placement has stricter limits than reads |
+
+### Fees and settlement
+
+Maker and taker fees are low and vary by market. Polymarket's fee structure has evolved over time -- check their official docs for the latest schedule. All positions settle in **USDC on Polygon** (chain ID 137). Winning shares pay $1.00, losing shares pay $0.00. Resolution uses the UMA Optimistic Oracle. Gas costs are minimal (typically < $0.01 per transaction).
+
+---
+
+## What the raw Polymarket API does not provide
+
+The Gamma and CLOB APIs cover market data and trade execution. But if you are building a trading bot or research tool, several things are missing:
+
+| Gap | Why it matters |
+|-----|---------------|
+| **Independent probability estimates** | You only see market consensus, not whether the market is mispriced |
+| **Cross-platform comparison** | No way to compare Polymarket prices against Kalshi or Robinhood |
+| **Position sizing guidance** | No Kelly criterion or bankroll management |
+| **Arbitrage detection** | No built-in way to find price divergences across platforms |
+| **Causal analysis** | No breakdown of why prices move — just the price itself |
+| **Resolution intelligence** | No prediction of when or how a market will resolve |
+| **Screening and filtering** | Basic sorting, but no AI-powered market screening for edge |
+| **Historical calibration** | No way to know if the market price is systematically biased |
+
+These gaps are where a dedicated intelligence layer adds value on top of the raw exchange API.
+
+---
+
+## Adding intelligence to Polymarket data
+
+You can layer AI-powered analysis on top of Polymarket by routing market data through an intelligence API. Here is a complete example that discovers markets on Polymarket, runs an independent analysis, and checks for cross-platform arbitrage.
+
+<CodeGroup>
+```bash cURL
+# List Polymarket markets
+curl "https://api.rekko.ai/v1/markets?source=polymarket&limit=5" \
+  -H "Authorization: Bearer YOUR_REKKO_API_KEY"
+
+# Trigger analysis
+curl -X POST "https://api.rekko.ai/v1/markets/polymarket/0xabc123.../analyze" \
+  -H "Authorization: Bearer YOUR_REKKO_API_KEY"
+
+# Get completed analysis (poll status first, then retrieve)
+curl "https://api.rekko.ai/v1/markets/polymarket/0xabc123.../analysis" \
+  -H "Authorization: Bearer YOUR_REKKO_API_KEY"
+
+# Check for cross-platform arbitrage
+curl "https://api.rekko.ai/v1/arbitrage?min_spread=0.02" \
+  -H "Authorization: Bearer YOUR_REKKO_API_KEY"
+```
+
+```python Python
+import time
+import httpx
+
+rekko = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_REKKO_API_KEY"},
+)
+
+# 1. Browse Polymarket markets (normalized format, no HMAC needed)
+markets = rekko.get("/markets", params={
+    "source": "polymarket",
+    "limit": 5,
+}).json()
+
+for m in markets:
+    print(f"{m['title']} | YES: {m['yes_price']} | Vol: ${m['volume_24h']:,.0f}")
+
+# 2. Pick the highest-volume market and analyze it
+market = markets[0]
+resp = rekko.post(f"/markets/polymarket/{market['market_id']}/analyze")
+analysis_id = resp.json()["analysis_id"]
+
+# 3. Poll until analysis completes
+while True:
+    status = rekko.get(
+        f"/markets/polymarket/{market['market_id']}/analyze/{analysis_id}/status"
+    ).json()
+    if status["status"] == "complete":
+        break
+    if status["status"] == "error":
+        raise Exception(status.get("error_message", "Analysis failed"))
+    time.sleep(5)
+
+# 4. Retrieve the full analysis with causal decomposition
+analysis = rekko.get(
+    f"/markets/polymarket/{market['market_id']}/analysis",
+    params={"expand": "causal,scenarios"},
+).json()
+
+print(f"\nMarket: {market['title']}")
+print(f"Market price: {market['yes_price']}")
+print(f"AI probability: {analysis['probability']}")
+print(f"Edge: {analysis['edge']}")
+print(f"Recommendation: {analysis['recommendation']}")
+
+# 5. Check for cross-platform arbitrage
+arbs = rekko.get("/arbitrage", params={"min_spread": 0.02}).json()
+for opp in arbs["opportunities"]:
+    print(f"\n{opp['event']}")
+    print(f"  Spread: {opp['spread_pct']:.1f}%")
+    print(f"  Cheaper on: {opp['cheaper_on']}")
+```
+
+```javascript JavaScript
+const base = "https://api.rekko.ai/v1";
+const headers = { Authorization: "Bearer YOUR_REKKO_API_KEY" };
+
+// 1. Browse Polymarket markets (normalized format)
+const marketsResp = await fetch(
+  `${base}/markets?source=polymarket&limit=5`,
+  { headers }
+);
+const markets = await marketsResp.json();
+
+markets.forEach((m) => {
+  console.log(
+    `${m.title} | YES: ${m.yes_price} | Vol: $${m.volume_24h.toLocaleString()}`
+  );
+});
+
+// 2. Analyze the top market
+const market = markets[0];
+const trigger = await fetch(
+  `${base}/markets/polymarket/${market.market_id}/analyze`,
+  { method: "POST", headers }
+);
+const { analysis_id } = await trigger.json();
+
+// 3. Poll until complete
+let status;
+do {
+  await new Promise((r) => setTimeout(r, 5000));
+  const poll = await fetch(
+    `${base}/markets/polymarket/${market.market_id}/analyze/${analysis_id}/status`,
+    { headers }
+  );
+  status = await poll.json();
+} while (status.status !== "complete");
+
+// 4. Get the analysis
+const analysis = await fetch(
+  `${base}/markets/polymarket/${market.market_id}/analysis?expand=causal,scenarios`,
+  { headers }
+).then((r) => r.json());
+
+console.log(`\nAI probability: ${analysis.probability}`);
+console.log(`Edge: ${analysis.edge}`);
+console.log(`Recommendation: ${analysis.recommendation}`);
+
+// 5. Check for cross-platform arbitrage
+const arbs = await fetch(`${base}/arbitrage?min_spread=0.02`, {
+  headers,
+}).then((r) => r.json());
+
+arbs.opportunities.forEach((opp) => {
+  console.log(`\n${opp.event} | Spread: ${opp.spread_pct}% | Cheaper on: ${opp.cheaper_on}`);
+});
+```
+</CodeGroup>
+
+### What the intelligence layer adds
+
+| Capability | Raw Polymarket | With Rekko |
+|------------|---------------|------------|
+| Market prices | Yes | Yes (normalized across platforms) |
+| Order book depth | Yes (CLOB API) | Not proxied — use CLOB directly |
+| Independent probability estimates | No | Yes |
+| Edge detection | No | Yes (`probability - market_price`) |
+| Causal decomposition | No | Yes (what drives the probability) |
+| Cross-platform arbitrage | No | Yes (Polymarket vs Kalshi vs Robinhood) |
+| Position sizing (Kelly) | No | Yes |
+| Resolution intelligence | No | Yes (time decay, key dates) |
+| Market screening | Basic sort/filter | AI-powered screening for mispricing |
+| Historical calibration | No | Yes (track accuracy over time) |
+
+<Tip>
+You do not need to choose between the Polymarket API and an intelligence API. Use Polymarket's CLOB directly for trade execution, and an intelligence API for analysis and decision-making.
+</Tip>
+
+---
+
+## Common pitfalls
+
+**Mixing up condition IDs and token IDs.** Condition IDs identify the market. Token IDs identify specific outcomes (Yes/No). Trading endpoints use token IDs, not condition IDs.
+
+**Forgetting the two-API split.** If you call `gamma-api.polymarket.com` for order book data, you will not find it. Order books live on `clob.polymarket.com`.
+
+**Stale `outcomePrices` from the Gamma API.** The Gamma API prices may lag behind the live order book by a few seconds. For latency-sensitive applications, read the order book directly from the CLOB API.
+
+**USDC and Polygon wallet setup.** Before you can trade, you need USDC on the Polygon network (chain ID 137) and must approve the CTF contract. The `py-clob-client` SDK handles CTF approval, but wallet funding is on you.
+
+**No sandbox environment.** Polymarket does not offer a testnet or paper trading mode. To test order placement, you are working with real funds. Use very small order sizes when developing.
+
+---
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Kalshi API guide" icon="chart-line" href="/guides/kalshi-api-guide">
+    The other major prediction market. Different auth model, same concepts.
+  </Card>
+  <Card title="Build a trading bot" icon="robot" href="/guides/build-trading-bot-python">
+    End-to-end tutorial for an automated prediction market trading bot.
+  </Card>
+  <Card title="API comparison" icon="table" href="/guides/prediction-market-api-comparison">
+    Side-by-side comparison of Polymarket, Kalshi, and Robinhood APIs.
+  </Card>
+  <Card title="Cross-platform arbitrage" icon="arrows-split-up-and-left" href="/guides/prediction-market-arbitrage">
+    Find and exploit price differences across platforms.
+  </Card>
+  <Card title="Rekko API reference" icon="code" href="/api-reference/introduction">
+    Full endpoint documentation with interactive playground.
+  </Card>
+</CardGroup>

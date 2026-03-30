@@ -1,0 +1,761 @@
+---
+title: "Prediction Market APIs Compared"
+sidebarTitle: "API Comparison"
+"og:title": "Prediction Market API Comparison 2026 — Kalshi vs Polymarket vs Robinhood"
+description: "Compare prediction market APIs across Kalshi, Polymarket, and Robinhood. Authentication, endpoints, rate limits, Python SDKs, and how to unify them."
+icon: scale-balanced
+---
+
+```python TL;DR — one API for all platforms
+import httpx
+
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+
+# List markets across Kalshi, Polymarket, and Robinhood in one call
+markets = client.get("/markets").json()
+for m in markets[:5]:
+    print(f"{m['platform']} | {m['title']} | YES: {m['yes_price']} | Vol: ${m['volume_24h']:,.0f}")
+
+# Get AI analysis with edge detection
+analysis = client.get("/markets/kalshi/KXFED-26MAR19/analysis").json()
+print(f"Edge: {analysis['edge']} | Recommendation: {analysis['recommendation']}")
+```
+
+## What this page covers
+
+- **Platform comparison table** — auth, endpoints, IDs, rate limits, fees, SDKs for all three platforms
+- **Kalshi API walkthrough** — RSA-PSS auth, REST endpoints, ticker format, Python examples
+- **Polymarket API walkthrough** — Gamma API for discovery, CLOB API for trading, HMAC signing
+- **Robinhood API walkthrough** — event contract endpoints, slug-based IDs, access limitations
+- **The fragmentation problem** — what it takes to build cross-platform tooling from raw APIs
+- **Unified approach** — how a single API call replaces three integrations and adds intelligence on top
+
+---
+
+## Platform comparison
+
+| Feature | Kalshi | Polymarket | Robinhood |
+|---|---|---|---|
+| **Regulation** | CFTC-regulated US exchange | Crypto-native (Polygon L2) | FINRA-registered broker-dealer |
+| **Base URL** | `trading-api.kalshi.com` | `gamma-api.polymarket.com` (discovery) / `clob.polymarket.com` (trading) | `api.robinhood.com` (general) |
+| **Auth method** | API key + RSA-PSS signed headers | API key + HMAC-SHA256 | OAuth 2.0 bearer token |
+| **Market ID format** | Ticker string (`KXFED-26MAR19`) | Hex condition ID (`0x1a2b...`) | Event slug (`fed-rate-cut-march-2026`) |
+| **Order types** | Limit, market | Limit (CLOB) | Market (via app/web) |
+| **Python SDK** | `kalshi-python` (community) | `py-clob-client` (official) | No official prediction market SDK |
+| **WebSocket support** | Yes (order book, fills) | Yes (CLOB order book) | No public WebSocket for events |
+| **Rate limits** | ~10 req/s | ~10 req/s (Gamma), stricter on CLOB | Standard Robinhood limits |
+| **Fee structure** | Maker: free / Taker: `0.07 * p * (1-p)` | Gas fees on Polygon + market spread | Commission-free, built into spread |
+| **Programmatic trading** | Yes (full API) | Yes (CLOB API) | No public trading API for events |
+| **Data access** | Full (markets, orderbook, history) | Full (markets, orderbook, trades) | Limited (event listings, prices) |
+
+<Info>
+All three platforms serve different audiences. Kalshi targets US-regulated traders, Polymarket attracts crypto-native users and high-volume markets, and Robinhood brings prediction markets to mainstream retail. Building on all three gives you the widest market coverage.
+</Info>
+
+---
+
+## Kalshi
+
+Kalshi is a CFTC-regulated designated contract market (DCM) based in the US. Its REST API at `trading-api.kalshi.com` provides full programmatic access to market data, order placement, and portfolio management.
+
+### Authentication
+
+Kalshi uses RSA-PSS signatures. You generate an RSA key pair, upload the public key to your Kalshi account, and sign every request with the private key. The signature covers the timestamp, HTTP method, and path.
+
+```python
+import httpx
+import time
+import base64
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+
+# Load your RSA private key
+with open("kalshi_private_key.pem", "rb") as f:
+    private_key = serialization.load_pem_private_key(f.read(), password=None)
+
+timestamp = str(int(time.time() * 1000))
+method = "GET"
+path = "/trade-api/v2/markets"
+
+# Sign: timestamp + method + path
+message = f"{timestamp}{method}{path}".encode()
+signature = private_key.sign(
+    message,
+    padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+    hashes.SHA256(),
+)
+
+resp = httpx.get(
+    f"https://trading-api.kalshi.com{path}",
+    params={"limit": 5},
+    headers={
+        "KALSHI-ACCESS-KEY": "your-api-key-id",
+        "KALSHI-ACCESS-SIGNATURE": base64.b64encode(signature).decode(),
+        "KALSHI-ACCESS-TIMESTAMP": timestamp,
+    },
+)
+markets = resp.json()["markets"]
+for m in markets:
+    print(f"{m['ticker']} | {m['title']} | YES: ${m['yes_bid'] / 100:.2f}")
+```
+
+### Market data
+
+Kalshi markets use ticker strings. Series tickers (e.g., `KXFED`) group related markets, and each event gets a specific ticker like `KXFED-26MAR19` (Fed rate decision, March 19, 2026). Prices are in cents (0-100), so divide by 100 for probability.
+
+Key endpoints:
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/trade-api/v2/markets` | GET | List markets with filters |
+| `/trade-api/v2/markets/{ticker}` | GET | Single market detail |
+| `/trade-api/v2/markets/{ticker}/orderbook` | GET | Current order book |
+| `/trade-api/v2/portfolio/orders` | POST | Place an order |
+| `/trade-api/v2/portfolio/positions` | GET | Your open positions |
+
+### Fees
+
+Kalshi's fee model favors makers. Posting limit orders that rest on the book (maker orders) is free. Taking liquidity costs `0.07 * price * (1 - price)`, maxing out at $0.0175 per contract at the 50-cent mark and falling to zero near 0 or 100. This matters for automated systems: if you can post limit orders and wait for fills, you avoid fees entirely.
+
+### Limitations
+
+Kalshi's API gives you raw market data and order execution. It does not provide analytics, cross-platform comparison, probability estimates independent of market price, or edge detection. You get prices, not intelligence.
+
+---
+
+## Polymarket
+
+Polymarket is a crypto-native prediction market on Polygon (Ethereum L2). It splits functionality across two APIs: the **Gamma Markets API** for market discovery and the **CLOB API** for order placement and execution.
+
+### Gamma API (market discovery)
+
+The Gamma API at `gamma-api.polymarket.com` is the simplest way to browse Polymarket data. It requires no authentication for basic reads.
+
+```python
+import httpx
+
+# No auth needed for market discovery
+resp = httpx.get(
+    "https://gamma-api.polymarket.com/markets",
+    params={"limit": 5, "active": True, "order": "volume24hr", "ascending": False},
+)
+markets = resp.json()
+for m in markets:
+    question = m["question"]
+    volume = float(m.get("volume", 0))
+    print(f"{question} | Volume: ${volume:,.0f}")
+```
+
+### CLOB API (trading)
+
+The CLOB API at `clob.polymarket.com` handles order book operations. It requires an API key and HMAC-SHA256 signed requests. You need a funded Polygon wallet to trade.
+
+Key endpoints:
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/markets` (Gamma) | GET | Browse markets, filter by active/volume |
+| `/markets/{condition_id}` (Gamma) | GET | Single market detail with outcomes |
+| `/order` (CLOB) | POST | Place a limit order |
+| `/orders` (CLOB) | GET | List your open orders |
+| `/book` (CLOB) | GET | Order book for a token |
+
+### Market identifiers
+
+Polymarket uses hex condition IDs (`0x1a2b3c...`) for markets and separate token IDs for YES and NO outcomes. A single question (e.g., "Will the Fed cut rates?") maps to a condition ID, and each outcome has its own ERC-1155 token. This two-layer ID system means you need to resolve condition IDs to token IDs before placing orders.
+
+### Limitations
+
+Polymarket's split API design adds complexity. Market discovery and trading are separate services with different auth, different ID systems, and different rate limits. There is no built-in analytics, no probability model beyond raw market price, and no cross-platform data. Volume data can lag.
+
+---
+
+## Robinhood
+
+Robinhood launched event contracts in 2024, bringing prediction markets to its existing user base of retail traders. The platform offers a mobile-first experience with a growing selection of markets.
+
+### API access
+
+Robinhood does not offer a dedicated public API for prediction market trading. Event contract data is accessible through the general Robinhood API, but programmatic order placement for event contracts is not publicly supported. Market data can be fetched for display and analysis purposes.
+
+```python
+import httpx
+
+# Robinhood event data (read-only, requires OAuth token)
+# Note: programmatic trading is not publicly available
+resp = httpx.get(
+    "https://api.robinhood.com/events/",
+    headers={"Authorization": "Bearer YOUR_ROBINHOOD_TOKEN"},
+    params={"limit": 5},
+)
+events = resp.json()["results"]
+for e in events:
+    print(f"{e['slug']} | {e['title']}")
+```
+
+### Market identifiers
+
+Robinhood uses human-readable event slugs (e.g., `fed-rate-cut-march-2026`). This is the most readable ID format of the three platforms, but there is no public ticker registry or API to search by slug pattern.
+
+### Strengths
+
+Robinhood's advantage is distribution. With millions of active users, event contracts on Robinhood can see significant retail volume. The commission-free model (fees built into the spread) is familiar to Robinhood's existing equity trading users. Market creation is curated, so listed events tend to have clear resolution criteria.
+
+### Limitations
+
+The biggest gap is programmatic access. Without a public trading API for event contracts, you cannot build automated strategies directly on Robinhood. Data access is also more limited than Kalshi or Polymarket — no public order book, no WebSocket feeds, and no official SDK. For automated systems, Robinhood data is useful as a price reference and volume indicator, but not as a trading venue.
+
+---
+
+## The fragmentation problem
+
+Building a cross-platform prediction market system means maintaining three separate integrations. Each platform has its own authentication scheme, data format, ID system, and API semantics. Here is what listing markets with basic edge detection looks like across all three:
+
+```python
+import httpx
+import time
+import base64
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+
+# --- Kalshi (RSA-PSS signed requests) ---
+with open("kalshi_private_key.pem", "rb") as f:
+    kalshi_key = serialization.load_pem_private_key(f.read(), password=None)
+
+ts = str(int(time.time() * 1000))
+msg = f"{ts}GET/trade-api/v2/markets".encode()
+sig = kalshi_key.sign(
+    msg,
+    padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+    hashes.SHA256(),
+)
+kalshi_markets = httpx.get(
+    "https://trading-api.kalshi.com/trade-api/v2/markets",
+    params={"limit": 20},
+    headers={
+        "KALSHI-ACCESS-KEY": "your-kalshi-key",
+        "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
+        "KALSHI-ACCESS-TIMESTAMP": ts,
+    },
+).json()["markets"]
+
+# --- Polymarket (separate Gamma API, different data shape) ---
+poly_markets = httpx.get(
+    "https://gamma-api.polymarket.com/markets",
+    params={"limit": 20, "active": True},
+).json()
+
+# --- Robinhood (OAuth, different structure entirely) ---
+rh_events = httpx.get(
+    "https://api.robinhood.com/events/",
+    headers={"Authorization": "Bearer your-robinhood-token"},
+    params={"limit": 20},
+).json()["results"]
+
+# --- Now normalize all three into a common format ---
+combined = []
+for m in kalshi_markets:
+    combined.append({
+        "platform": "kalshi",
+        "title": m["title"],
+        "yes_price": m["yes_bid"] / 100,
+        "volume": m.get("volume", 0),
+        "id": m["ticker"],
+    })
+for m in poly_markets:
+    combined.append({
+        "platform": "polymarket",
+        "title": m["question"],
+        "yes_price": float(m.get("outcomePrices", "[0.5]").strip("[]").split(",")[0]),
+        "volume": float(m.get("volume", 0)),
+        "id": m["conditionId"],
+    })
+for e in rh_events:
+    combined.append({
+        "platform": "robinhood",
+        "title": e["title"],
+        "yes_price": None,  # Requires additional API call per event
+        "volume": None,
+        "id": e["slug"],
+    })
+
+# Sort by volume (where available)
+combined.sort(key=lambda x: x.get("volume") or 0, reverse=True)
+for m in combined[:10]:
+    print(f"{m['platform']:12} | {m['title'][:50]:50} | YES: {m['yes_price']}")
+```
+
+That is roughly 60 lines of code just to list markets. It requires three sets of credentials, an RSA key pair, and manual normalization. It does not include error handling, rate limiting, retries, pagination, or any form of analysis. Every field name is different across platforms (`title` vs `question`, `yes_bid` vs `outcomePrices`, `volume` vs `volume24hr`). Price formats differ (cents vs decimals). ID formats differ (tickers vs hex hashes vs slugs).
+
+This is before you add any intelligence. Cross-platform arbitrage, probability estimation, edge detection, Kelly sizing — each of these requires another layer of code on top of the normalization.
+
+---
+
+## Unified intelligence layer
+
+Rekko normalizes market data from all three platforms into a single schema and layers AI analysis on top. The same query that took 60+ lines above becomes:
+
+<CodeGroup>
+```bash cURL
+curl https://api.rekko.ai/v1/markets \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```python Python
+import httpx
+
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+
+# All platforms, normalized, sorted by volume
+markets = client.get("/markets").json()
+for m in markets[:5]:
+    print(f"{m['platform']} | {m['title']} | YES: {m['yes_price']} | Vol: ${m['volume_24h']:,.0f}")
+```
+
+```javascript JavaScript
+const resp = await fetch("https://api.rekko.ai/v1/markets", {
+  headers: { Authorization: "Bearer YOUR_API_KEY" },
+});
+const markets = await resp.json();
+markets.slice(0, 5).forEach((m) => {
+  console.log(`${m.platform} | ${m.title} | YES: ${m.yes_price} | Vol: $${m.volume_24h.toLocaleString()}`);
+});
+```
+</CodeGroup>
+
+Every market object uses the same schema regardless of source platform:
+
+```json
+{
+  "platform": "kalshi",
+  "market_id": "KXFED-26MAR19",
+  "title": "Will the Fed cut rates at the March 2026 meeting?",
+  "url": "https://kalshi.com/markets/kxfed-26mar19",
+  "category": "economics",
+  "yes_price": 0.62,
+  "volume_24h": 48250.00,
+  "liquidity": 125000.00,
+  "open_interest": 340000.00,
+  "resolution_date": "2026-03-19T18:00:00Z",
+  "updated_at": "2026-03-24T14:30:00Z"
+}
+```
+
+One auth header, one schema, one endpoint. Filter by platform if you want:
+
+```bash
+# Kalshi only
+curl "https://api.rekko.ai/v1/markets?source=kalshi&limit=20" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# Polymarket only
+curl "https://api.rekko.ai/v1/markets?source=polymarket&limit=20" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Adding intelligence
+
+The real value is not just normalization. Rekko runs a multi-stage research pipeline that produces independent probability estimates, edge calculations, and trading signals. Here is the full workflow — list markets, get an analysis, and generate a signal:
+
+<CodeGroup>
+```python Python
+import time
+import httpx
+
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+    timeout=60.0,
+)
+
+# 1. Find markets with volume
+markets = client.get("/markets", params={"limit": 20}).json()
+top_market = markets[0]
+platform = top_market["platform"]
+market_id = top_market["market_id"]
+print(f"Analyzing: {top_market['title']} ({platform}/{market_id})")
+
+# 2. Trigger deep analysis (runs async, 30-90 seconds)
+trigger = client.post(f"/markets/{platform}/{market_id}/analyze").json()
+analysis_id = trigger["analysis_id"]
+
+# 3. Poll until complete
+while True:
+    status = client.get(
+        f"/markets/{platform}/{market_id}/analyze/{analysis_id}/status"
+    ).json()
+    if status["status"] == "complete":
+        break
+    if status["status"] == "error":
+        raise Exception(status.get("error_message", "Analysis failed"))
+    time.sleep(5)
+
+# 4. Retrieve analysis with causal decomposition
+analysis = client.get(
+    f"/markets/{platform}/{market_id}/analysis",
+    params={"expand": "causal,scenarios"},
+).json()
+print(f"Market price: {top_market['yes_price']}")
+print(f"Estimated probability: {analysis['probability']}")
+print(f"Edge: {analysis['edge']}")
+print(f"Recommendation: {analysis['recommendation']}")
+print(f"Confidence: {analysis['confidence']}")
+print(f"Sources analyzed: {analysis['source_count']}")
+
+# 5. Get a trading signal with Kelly sizing
+signal = client.post(
+    "/signals",
+    json={"platform": platform, "market_id": market_id},
+).json()
+print(f"Position size: {signal['size_pct']:.1%} of bankroll")
+print(f"Risk: {signal['risk_rating']}")
+```
+
+```javascript JavaScript
+const base = "https://api.rekko.ai/v1";
+const headers = { Authorization: "Bearer YOUR_API_KEY" };
+
+// 1. Find markets with volume
+const marketsResp = await fetch(`${base}/markets?limit=20`, { headers });
+const markets = await marketsResp.json();
+const top = markets[0];
+console.log(`Analyzing: ${top.title} (${top.platform}/${top.market_id})`);
+
+// 2. Trigger deep analysis
+const trigger = await fetch(
+  `${base}/markets/${top.platform}/${top.market_id}/analyze`,
+  { method: "POST", headers }
+).then((r) => r.json());
+
+// 3. Poll until complete
+let status;
+do {
+  await new Promise((r) => setTimeout(r, 5000));
+  status = await fetch(
+    `${base}/markets/${top.platform}/${top.market_id}/analyze/${trigger.analysis_id}/status`,
+    { headers }
+  ).then((r) => r.json());
+} while (status.status !== "complete");
+
+// 4. Retrieve analysis
+const analysis = await fetch(
+  `${base}/markets/${top.platform}/${top.market_id}/analysis?expand=causal,scenarios`,
+  { headers }
+).then((r) => r.json());
+
+console.log(`Edge: ${analysis.edge} | Recommendation: ${analysis.recommendation}`);
+console.log(`Confidence: ${analysis.confidence} | Sources: ${analysis.source_count}`);
+
+// 5. Get a trading signal with Kelly sizing
+const signal = await fetch(`${base}/signals`, {
+  method: "POST",
+  headers: { ...headers, "Content-Type": "application/json" },
+  body: JSON.stringify({ platform: top.platform, market_id: top.market_id }),
+}).then((r) => r.json());
+
+console.log(`Size: ${(signal.size_pct * 100).toFixed(1)}% | Risk: ${signal.risk_rating}`);
+```
+
+```bash cURL
+# 1. List markets
+curl https://api.rekko.ai/v1/markets?limit=5 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# 2. Trigger analysis
+curl -X POST https://api.rekko.ai/v1/markets/kalshi/KXFED-26MAR19/analyze \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# 3. Poll status (replace ANALYSIS_ID)
+curl https://api.rekko.ai/v1/markets/kalshi/KXFED-26MAR19/analyze/ANALYSIS_ID/status \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# 4. Get analysis with expansions
+curl "https://api.rekko.ai/v1/markets/kalshi/KXFED-26MAR19/analysis?expand=causal,scenarios" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# 5. Generate a trading signal
+curl -X POST https://api.rekko.ai/v1/signals \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"platform": "kalshi", "market_id": "KXFED-26MAR19"}'
+```
+</CodeGroup>
+
+---
+
+## Cross-platform arbitrage
+
+When the same event is listed on multiple platforms, prices can diverge. A Fed rate decision might trade at 62 cents on Kalshi and 58 cents on Polymarket. That 4-point spread is a potential arbitrage opportunity.
+
+Detecting these manually requires fetching data from both platforms, fuzzy-matching event titles (Kalshi says "Fed rate cut", Polymarket says "Will the Federal Reserve lower interest rates?"), and comparing prices while accounting for fee differences.
+
+Rekko handles the matching and surfaces arbitrage opportunities directly:
+
+<CodeGroup>
+```bash cURL
+curl https://api.rekko.ai/v1/arbitrage \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```python Python
+import httpx
+
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+
+arb = client.get("/arbitrage").json()
+for opp in arb["opportunities"]:
+    print(f"{opp['title']}")
+    print(f"  Kalshi YES: {opp['kalshi_yes_price']}  |  Polymarket YES: {opp['polymarket_yes_price']}")
+    print(f"  Spread: {opp['spread']} | Direction: {opp['direction']}")
+    print()
+```
+
+```javascript JavaScript
+const resp = await fetch("https://api.rekko.ai/v1/arbitrage", {
+  headers: { Authorization: "Bearer YOUR_API_KEY" },
+});
+const arb = await resp.json();
+arb.opportunities.forEach((opp) => {
+  console.log(`${opp.title}`);
+  console.log(`  Kalshi: ${opp.kalshi_yes_price} | Polymarket: ${opp.polymarket_yes_price}`);
+  console.log(`  Spread: ${opp.spread} | Direction: ${opp.direction}`);
+});
+```
+</CodeGroup>
+
+The [live arbitrage endpoint](/api-reference/deep/arbitrage-live) adds real-time monitoring via SSE, so you can stream updates instead of polling.
+
+---
+
+## Raw APIs vs Rekko: capability comparison
+
+| Capability | Raw platform APIs | Rekko API |
+|---|---|---|
+| **Cross-platform market listing** | Build and maintain 3 integrations | Single `GET /markets` call |
+| **Normalized data schema** | Manual normalization per platform | Consistent `Market` object |
+| **AI probability estimates** | Not available | Independent of market price |
+| **Edge detection** | Calculate manually after building a model | `edge` field on every analysis |
+| **Causal factor decomposition** | Not available | `?expand=causal` on analyses |
+| **Trading signals with Kelly sizing** | Implement Kelly criterion yourself | `POST /signals` with `size_pct` |
+| **Cross-platform arbitrage** | Fuzzy-match titles, compare prices manually | `GET /arbitrage` |
+| **Resolution intelligence** | Track manually | Time decay, key dates, determination likelihood |
+| **Market screening** | Query each platform separately | `POST /screen` with filters across all platforms |
+| **Correlation analysis** | Not available | `GET /correlation` between markets |
+| **Sentiment analysis** | Not available | Social and news sentiment scoring |
+| **Authentication** | 3 different auth schemes (RSA-PSS, HMAC, OAuth) | Single Bearer token |
+| **Rate limit management** | 3 separate rate limiters | One rate limit, managed server-side |
+| **Historical data** | Per-platform queries with different schemas | `GET /markets/{platform}/{id}/history` |
+| **Webhook alerts** | Not available | Price movement, arbitrage, and resolution webhooks |
+| **SSE streaming** | Kalshi and Polymarket WebSocket (different protocols) | Unified SSE stream |
+
+---
+
+## Authentication comparison
+
+Each platform requires a different authentication setup. Here is what you need to get started with each.
+
+### Kalshi
+
+1. Create an account at [kalshi.com](https://kalshi.com)
+2. Generate an RSA key pair (2048-bit minimum)
+3. Upload the public key to your Kalshi account settings
+4. Sign every request with the private key using RSA-PSS (SHA-256)
+5. Send the key ID, signature, and timestamp as custom headers
+
+This is the most complex auth of the three. Every request requires real-time signing, and key management is your responsibility.
+
+### Polymarket
+
+1. Create a funded Polygon wallet
+2. Register for API access at [docs.polymarket.com](https://docs.polymarket.com)
+3. Generate an API key and secret
+4. Sign requests with HMAC-SHA256 using your secret
+5. The Gamma API (read-only market data) requires no auth
+
+Trading requires HMAC signing and a funded wallet. Read-only access is simpler.
+
+### Robinhood
+
+1. Have an existing Robinhood brokerage account
+2. Authenticate via OAuth 2.0 (device code flow or web flow)
+3. Pass the bearer token with each request
+4. Token refresh is required periodically
+
+Standard OAuth, but Robinhood does not offer a separate API key for programmatic use. You authenticate as a user.
+
+### Rekko
+
+1. Sign up with your email (no wallet, no RSA keys, no brokerage account)
+2. Get a Bearer token in the response
+3. Pass it as `Authorization: Bearer YOUR_API_KEY`
+
+<CodeGroup>
+```bash cURL
+# Sign up
+curl -X POST https://api.rekko.ai/v1/customers/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com", "name": "Your Name"}'
+
+# Use the key
+curl https://api.rekko.ai/v1/markets \
+  -H "Authorization: Bearer rk_free_your_key_here"
+```
+
+```python Python
+import httpx
+
+# Sign up
+resp = httpx.post("https://api.rekko.ai/v1/customers/signup", json={
+    "email": "you@example.com",
+    "name": "Your Name",
+})
+api_key = resp.json()["api_key"]
+
+# Use the key
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": f"Bearer {api_key}"},
+)
+markets = client.get("/markets").json()
+```
+
+```javascript JavaScript
+// Sign up
+const signup = await fetch("https://api.rekko.ai/v1/customers/signup", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: "you@example.com", name: "Your Name" }),
+});
+const { api_key } = await signup.json();
+
+// Use the key
+const resp = await fetch("https://api.rekko.ai/v1/markets", {
+  headers: { Authorization: `Bearer ${api_key}` },
+});
+const markets = await resp.json();
+```
+</CodeGroup>
+
+---
+
+## Fee comparison
+
+Fees affect edge calculations directly. A market with a 3% edge but 2% round-trip fees leaves only 1% net.
+
+| Platform | Maker fee | Taker fee | Other costs |
+|---|---|---|---|
+| **Kalshi** | Free | `0.07 * p * (1-p)` (max $0.0175/contract) | None |
+| **Polymarket** | Market spread | Market spread + Polygon gas (~$0.01) | ETH/USDC bridge costs |
+| **Robinhood** | N/A | Built into spread | None visible |
+
+Kalshi's maker-free model is the most favorable for automated systems. If your system posts limit orders and waits for fills, you pay zero fees. Polymarket's costs are lower per-transaction but require maintaining a funded Polygon wallet and bridging assets. Robinhood's spread-embedded model means fees exist but are not transparent.
+
+<Tip>
+When evaluating signals from the Rekko API, the `edge` field already accounts for the market's current bid-ask spread. For Kalshi-specific fee modeling in your position sizing, see the [Kelly criterion guide](/guides/kelly-criterion-position-sizing).
+</Tip>
+
+---
+
+## Rate limits and throughput
+
+| Platform | Read limit | Write limit | Notes |
+|---|---|---|---|
+| **Kalshi** | ~10 req/s | ~10 req/s | Shared across reads and writes |
+| **Polymarket (Gamma)** | ~10 req/s | N/A (read-only) | Separate from CLOB limits |
+| **Polymarket (CLOB)** | Stricter | Stricter | Per-endpoint, varies |
+| **Robinhood** | Standard | N/A for events | General Robinhood rate limits |
+| **Rekko (Free)** | 30 req/min | 30 req/min | Includes all endpoint tiers |
+| **Rekko (Pro)** | 120 req/min | 120 req/min | Strategy endpoints: 5 req/min |
+
+Rekko's server-side architecture handles upstream rate limiting internally. When you call `GET /markets`, Rekko manages pagination, retries, and rate compliance across all three platforms behind the scenes. You only need to respect one rate limit.
+
+---
+
+## SDK and library comparison
+
+| Platform | Official SDK | Language | Status |
+|---|---|---|---|
+| **Kalshi** | `kalshi-python` (community) | Python | Actively maintained, covers most endpoints |
+| **Polymarket** | `py-clob-client` | Python | Official, focused on CLOB trading |
+| **Robinhood** | None for events | — | General Robinhood wrappers exist but lack event contract support |
+| **Rekko** | Any HTTP client | Any | Standard REST — use `httpx`, `fetch`, `curl`, or any HTTP library |
+
+Rekko is a standard REST API. No SDK installation, no crypto wallet setup, no RSA key generation. Any language with an HTTP client works. The Python examples in this guide use `httpx` because it supports both sync and async patterns, but `requests`, `urllib3`, or any other HTTP library works identically.
+
+---
+
+## When to use raw platform APIs vs Rekko
+
+**Use raw platform APIs when:**
+- You need direct order placement on a specific platform (Rekko is intelligence, not an order router)
+- You are building exchange-specific features like order book visualization
+- You need sub-second WebSocket data for high-frequency strategies
+- You want to manage your own market data infrastructure
+
+**Use Rekko when:**
+- You want cross-platform market coverage without maintaining three integrations
+- You need AI-driven probability estimates and edge detection
+- You are building a trading bot and want pre-computed signals with position sizing
+- You want arbitrage detection across platforms
+- You are researching markets and want causal factor analysis
+- You need webhook alerts for price movements or resolution events
+
+**Use both together:** Many traders use Rekko for intelligence and screening, then execute directly on the platform API. Rekko tells you what to trade and how much; you execute where the opportunity is.
+
+---
+
+## Frequently asked questions
+
+**Can I trade through the Rekko API?**
+
+Rekko provides intelligence, not order execution. Use Rekko to identify opportunities and generate signals, then execute trades on Kalshi, Polymarket, or Robinhood directly. The [execution guidance endpoint](/api-reference/strategy/execution-guidance) provides platform-specific order parameters to simplify this handoff.
+
+**How fresh is the market data?**
+
+Market listings refresh on a regular cadence. Each market object includes an `updated_at` timestamp. For real-time price monitoring, use the [SSE streaming endpoint](/api-reference/streaming/sse-stream) or set up [webhooks](/api-reference/streaming/create-webhook).
+
+**Does Rekko support other platforms?**
+
+Rekko currently covers Kalshi, Polymarket, and Robinhood. Platform coverage is expanding. Join the [Discord](https://discord.gg/qTPEk9aAZg) to request a platform.
+
+**Is there a free tier?**
+
+Yes. The free plan includes 100 market listing calls and 10 AI analysis calls per month with no credit card required. See [pricing](/pricing) for details.
+
+**Can I use Rekko from my AI coding assistant?**
+
+Yes. Rekko offers an [MCP server](/integrations/mcp/overview) that works with Claude Code, Cursor, and other MCP-compatible tools. You can query markets, trigger analyses, and get signals directly from your editor.
+
+---
+
+## What's next
+
+<CardGroup cols={3}>
+  <Card title="Build a trading bot" icon="robot" href="/guides/build-trading-bot-python">
+    End-to-end Python tutorial using Rekko signals for automated trading.
+  </Card>
+  <Card title="Kalshi API deep dive" icon="building-columns" href="/guides/kalshi-api-guide">
+    Detailed guide to Kalshi's REST API, auth, and order types.
+  </Card>
+  <Card title="Polymarket API deep dive" icon="coins" href="/guides/polymarket-api-guide">
+    Gamma API, CLOB API, wallet setup, and trading flow.
+  </Card>
+  <Card title="Cross-platform arbitrage" icon="scale-unbalanced" href="/guides/prediction-market-arbitrage">
+    Find and exploit price divergences across platforms.
+  </Card>
+  <Card title="Kelly criterion sizing" icon="calculator" href="/guides/kelly-criterion-position-sizing">
+    Optimal position sizing for prediction market trades.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get your API key and make your first call in 5 minutes.
+  </Card>
+</CardGroup>

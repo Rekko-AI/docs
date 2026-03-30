@@ -1,0 +1,82 @@
+---
+title: Quickstart
+description: Get your first Rekko signal in 5 minutes.
+icon: rocket
+---
+
+<Steps>
+  <Step title="Install the skill">
+    ```bash
+    npx skills add Rekko-AI/rekko-skill
+    ```
+
+    Or clone the repo and copy `SKILL.md` into your agent's skill directory:
+
+    ```bash
+    git clone https://github.com/Rekko-AI/rekko-skill.git
+    ```
+  </Step>
+
+  <Step title="Set up authentication">
+    **Option A: API key** (simplest)
+
+    Get a free key at [rekko.ai/dashboard](https://rekko.ai/dashboard):
+
+    ```bash
+    export REKKO_API_KEY=rk_free_your_key_here
+    ```
+
+    **Option B: x402 autopay** (for autonomous agents)
+
+    Fund an EVM wallet with USDC on Base mainnet, then set:
+
+    ```bash
+    export X402_PRIVATE_KEY=0x_your_private_key
+    ```
+  </Step>
+
+  <Step title="Install Python dependencies">
+    ```bash
+    pip install -r requirements.txt
+    ```
+  </Step>
+
+  <Step title="Make your first call">
+    ```python
+    from rekko_tools import RekkoClient
+
+    async with RekkoClient() as client:
+        # Browse top markets ($0.01)
+        markets = await client.list_markets(source="kalshi", limit=10)
+        print(markets)
+    ```
+  </Step>
+
+  <Step title="Get a strategy signal">
+    ```python
+    async with RekkoClient() as client:
+        # Deep analysis + trading signal ($2.00, takes 30-90s)
+        signal = await client.get_strategy(
+            "Will the Fed cut rates at the next meeting?"
+        )
+        print(f"Recommendation: {signal['recommendation']}")
+        print(f"Edge: {signal['edge']}")
+        print(f"Confidence: {signal['confidence']}")
+    ```
+  </Step>
+
+  <Step title="Chain to an execution skill">
+    If the signal says `BUY_YES` with confidence > 0.5, pass it to PolyClaw or Kalshi Trader:
+
+    ```
+    IF recommendation == "BUY_YES" AND confidence > 0.5:
+        -> chain to execution skill with ticker, side, target_price
+    ```
+  </Step>
+</Steps>
+
+## Next steps
+
+- Read the [SKILL.md](https://github.com/Rekko-AI/rekko-skill/blob/main/SKILL.md) for the complete endpoint reference and all 6 workflow patterns
+- Explore the [Python client reference](/integrations/openclaw/python-client) for the full `RekkoClient` API
+- Check [signal accuracy](/api-reference/analytics/calibration) before relying on high-confidence calls

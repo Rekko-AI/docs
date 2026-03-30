@@ -1,4 +1,82 @@
 ---
 title: Sign Up
-openapi: POST /v1/customers/signup
 ---
+
+Create a free-tier account. Depending on server configuration, returns an API key immediately or requires email verification first.
+
+<Note>
+  This endpoint is used by the [rekko.ai/dashboard](https://rekko.ai/dashboard) signup flow.
+  RapidAPI users get their keys through the RapidAPI marketplace instead.
+</Note>
+
+## Request
+
+```bash
+curl -X POST "https://api.rekko.ai/v1/customers/signup" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "trader@example.com",
+    "name": "Jane",
+    "turnstile_token": "CAPTCHA_TOKEN"
+  }'
+```
+
+<ParamField body="email" type="string" required>
+  Your email address. Disposable emails are rejected.
+</ParamField>
+
+<ParamField body="name" type="string">
+  Display name (optional).
+</ParamField>
+
+<ParamField body="turnstile_token" type="string" required>
+  Cloudflare Turnstile verification token from the signup form.
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Human-readable status message.
+</ResponseField>
+
+<ResponseField name="requires_verification" type="boolean">
+  If `true`, check your email for a verification link before using the key.
+</ResponseField>
+
+<ResponseField name="api_key" type="string">
+  Your API key (only present when `requires_verification` is `false`).
+  Store this securely — it is only shown once.
+</ResponseField>
+
+<ResponseField name="customer_id" type="string">
+  Your customer ID for reference.
+</ResponseField>
+
+<ResponseExample>
+```json Immediate key
+{
+  "message": "Welcome to Rekko AI! Your API key is ready.",
+  "requires_verification": false,
+  "api_key": "rk_free_abc123def456...",
+  "customer_id": "cus_xyz789"
+}
+```
+
+```json Email verification required
+{
+  "message": "Check your email to verify your account.",
+  "requires_verification": true,
+  "customer_id": "cus_xyz789"
+}
+```
+</ResponseExample>
+
+### Error responses
+
+| Status | Reason |
+|---|---|
+| **403** | Turnstile bot check failed |
+| **409** | Account with this email already exists |
+| **422** | Disposable email address |
+| **429** | Signup rate limit (5 per hour per IP) |
+| **503** | Signup not configured on server |

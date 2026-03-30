@@ -1,0 +1,70 @@
+---
+title: Quotas
+description: Monthly usage quotas, enforcement, and reset dates.
+icon: hourglass
+---
+
+## Monthly quotas (Free tier)
+
+Free tier customers have monthly call limits per endpoint tier:
+
+| Tier | Monthly limit | Endpoints |
+|------|--------------|-----------|
+| **LISTING** | 100 | Markets, prices, history, streaming |
+| **INSIGHT** | 10 | Analysis, screening, resolution |
+| **STRATEGY** | 0 (Pro only) | Signals, execution, consensus |
+| **DEEP** | 0 (Pro only) | Arbitrage, correlation, webhooks |
+
+Pro customers have higher limits. See [Plans](/account/plans) for details.
+
+## When you exceed your quota
+
+The API returns `429 Too Many Requests` with details:
+
+```json
+{
+  "detail": "Monthly INSIGHT quota exceeded (10/10). Resets on 2026-04-01. Upgrade to Pro for higher limits at https://rekko.ai/dashboard"
+}
+```
+
+The response includes:
+- A `Retry-After` header with the reset date in ISO 8601 format
+- A link to upgrade in the detail message
+
+## Reset schedule
+
+Quotas reset on the **1st of each month at 00:00 UTC**. The reset date is included in the `/v1/customers/me` response as `resets_on`.
+
+## Monitoring your usage
+
+Check your current usage at any time:
+
+```bash
+curl https://api.rekko.ai/v1/customers/me \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  | jq '{usage, quotas, resets_on}'
+```
+
+```json
+{
+  "usage": { "listing": 45, "insight": 8, "strategy": 0, "deep": 0 },
+  "quotas": { "listing": 100, "insight": 10, "strategy": 0, "deep": 0 },
+  "resets_on": "2026-04-01"
+}
+```
+
+## Free endpoints
+
+These endpoints are always free and don't count toward any quota:
+
+- `GET /v1/health` — API health check
+- `GET /v1/pricing` — Tier pricing information
+- `GET /v1/calibration` — Signal accuracy and calibration metrics
+
+<Tip>
+  Use `/v1/calibration` to evaluate Rekko's accuracy before committing to a paid plan. It's always free and unauthenticated.
+</Tip>
+
+## Upgrading
+
+If you consistently hit your quota, [upgrade to Pro](https://rekko.ai/dashboard) for 100x the LISTING calls, 50x the INSIGHT calls, plus access to STRATEGY and DEEP tiers.

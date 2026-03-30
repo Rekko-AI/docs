@@ -1,0 +1,103 @@
+---
+title: Signals
+description: Anatomy of a trading signal — recommendation, edge, sizing, and risk.
+icon: bullseye-arrow
+---
+
+A **signal** is an actionable trading recommendation with position sizing. It's the output of `POST /v1/signals` and combines a full analysis with Kelly-derived sizing.
+
+## The Signal object
+
+```json
+{
+  "platform": "kalshi",
+  "market_id": "KXFED-26MAR19",
+  "title": "Will the Fed cut rates at the March 2026 meeting?",
+  "recommendation": "BUY_YES",
+  "target_price": 0.58,
+  "edge": 0.12,
+  "confidence": 0.73,
+  "risk_rating": "medium",
+  "size_pct": 0.042,
+  "time_horizon": "days",
+  "hedge": "Buy NO on KXFED-26MAR26 at 0.82",
+  "freshness": "fresh",
+  "generated_at": "2026-03-24T14:30:00Z",
+  "expires_at": "2026-03-25T14:30:00Z"
+}
+```
+
+## Recommendation types
+
+| Value | Meaning |
+|-------|---------|
+| `BUY_YES` | The event is more likely than the market implies — buy YES contracts |
+| `BUY_NO` | The event is less likely than the market implies — buy NO contracts |
+| `NO_TRADE` | Edge is too small or confidence too low to justify a position |
+
+## Edge
+
+The `edge` field is the core of every signal:
+
+```
+edge = estimated_probability - market_price
+```
+
+- **Positive edge** → market underprices the event → `BUY_YES`
+- **Negative edge** → market overprices the event → `BUY_NO`
+- **Near-zero edge** → no actionable opportunity → `NO_TRADE`
+
+Example: if Rekko estimates 74% probability but the market prices it at 62%, the edge is `+0.12` (12 percentage points).
+
+## Position sizing (Kelly criterion)
+
+The `size_pct` field is a Kelly-derived position size as a fraction of your bankroll:
+
+- `0.042` means "risk 4.2% of your bankroll on this trade"
+- Accounts for edge magnitude, confidence, and risk rating
+- Conservative half-Kelly by default — designed to avoid ruin
+
+<Warning>
+  `size_pct` is a suggestion, not financial advice. Always apply your own risk management.
+</Warning>
+
+## Risk ratings
+
+| Rating | Meaning |
+|--------|---------|
+| `low` | Well-understood event, high source quality, multiple confirming signals |
+| `medium` | Moderate uncertainty, mixed signals, or limited source coverage |
+| `high` | Significant uncertainty, potential for insider information, or thin markets |
+
+## Time horizon
+
+| Value | Meaning |
+|-------|---------|
+| `hours` | Signal is time-sensitive — act quickly or edge may evaporate |
+| `days` | Edge likely persists for 1-7 days |
+| `weeks` | Structural mispricing, slower to correct |
+
+## Signal expiry
+
+Always check `expires_at` before acting. After this timestamp, the signal is stale and should not be traded. Market conditions may have changed.
+
+## Requesting a signal
+
+```bash
+curl -X POST https://api.rekko.ai/v1/signals \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"platform": "kalshi", "market_id": "KXFED-26MAR19"}'
+```
+
+<Tip>
+  Signals include a full analysis under the hood. If you only need the analysis without sizing, use the [Analysis Pipeline](/concepts/analysis-pipeline) instead — it's a cheaper INSIGHT-tier call.
+</Tip>
+
+## Portfolio-aware signals
+
+For position-adjusted sizing that accounts for correlation with your existing holdings, use `POST /v1/signals/portfolio`. Pass your current positions and bankroll to get adjusted sizing, concentration warnings, and hedge recommendations.
+
+<Card title="Portfolio Signal endpoint" icon="chart-pie" href="/api-reference/strategy/portfolio-signal">
+  Full endpoint documentation with playground.
+</Card>

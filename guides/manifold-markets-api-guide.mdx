@@ -1,0 +1,186 @@
+---
+title: "Manifold Markets API Guide"
+sidebarTitle: "Manifold Markets"
+"og:title": "Manifold Markets API Guide 2026 — Play Money Predictions and Real-Money Alternatives"
+description: "Guide to the Manifold Markets API for play-money prediction markets. REST endpoints, market creation, and when to use real-money platforms like Kalshi and Polymarket instead."
+icon: coins
+---
+
+## What this page covers
+
+- What Manifold Markets is and how it differs from real-money platforms
+- Manifold Markets API overview and key endpoints
+- When to use Manifold vs real-money platforms
+- How to access real-money prediction market data and analysis
+
+---
+
+## What is Manifold Markets?
+
+Manifold Markets is an open-source prediction market platform that uses play money (called "mana"). Anyone can create a market on any topic, making it popular for community forecasting, research, and casual predictions.
+
+| Feature | Details |
+|---------|---------|
+| Currency | Play money (mana) — not real money |
+| Market creation | Anyone can create a market |
+| Categories | Unlimited — user-generated |
+| Source code | Open source (GitHub) |
+| API | Full REST API, no auth required for reads |
+| Community | Active forecasting community, academic research |
+
+### Key difference: play money vs real money
+
+Manifold uses play money, which means prices may not reflect real market consensus the way real-money platforms do. Real money creates stronger incentives for accurate pricing — traders with genuine financial exposure research more thoroughly and correct mispricings faster.
+
+For serious analysis, trading signals, or building trading bots, real-money platforms (Kalshi, Polymarket) provide more reliable price signals.
+
+## Manifold Markets API
+
+Manifold has a clean REST API. No authentication is needed for read operations.
+
+### Base URL
+
+```
+https://api.manifold.markets/v0
+```
+
+### List markets
+
+<CodeGroup>
+```python Python
+import httpx
+
+resp = httpx.get("https://api.manifold.markets/v0/markets", params={"limit": 10})
+markets = resp.json()
+for m in markets:
+    print(f"{m['question'][:60]:60} | Prob: {m.get('probability', 'N/A')}")
+```
+
+```bash cURL
+curl "https://api.manifold.markets/v0/markets?limit=10"
+```
+
+```javascript JavaScript
+const resp = await fetch("https://api.manifold.markets/v0/markets?limit=10");
+const markets = await resp.json();
+markets.forEach((m) => console.log(`${m.question} | Prob: ${m.probability}`));
+```
+</CodeGroup>
+
+### Get a single market
+
+```python
+resp = httpx.get(f"https://api.manifold.markets/v0/market/{market_id}")
+market = resp.json()
+```
+
+### Search markets
+
+```python
+resp = httpx.get("https://api.manifold.markets/v0/search-markets", params={"term": "Fed rate"})
+results = resp.json()
+```
+
+### Market data format
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | string | Unique identifier |
+| question | string | The market question |
+| probability | number | Current probability (0-1) |
+| totalLiquidity | number | Available liquidity (mana) |
+| volume | number | Total volume traded (mana) |
+| creatorName | string | Who created the market |
+| closeTime | number | When trading closes (Unix ms) |
+| resolution | string | YES, NO, MKT, or null if unresolved |
+| mechanism | string | `cpmm-1` (constant product market maker) |
+
+### Place a trade (requires auth)
+
+Trading requires an API key from your Manifold account:
+
+```python
+resp = httpx.post(
+    f"https://api.manifold.markets/v0/market/{market_id}/bet",
+    headers={"Authorization": f"Key {MANIFOLD_API_KEY}"},
+    json={"amount": 100, "outcome": "YES"},
+)
+```
+
+### Python SDK
+
+The community maintains a Python client:
+
+```bash
+pip install manifoldpy
+```
+
+```python
+from manifoldpy import api
+
+markets = api.get_markets(limit=10)
+```
+
+## When to use Manifold vs real-money platforms
+
+| Use case | Manifold | Real-money (Kalshi/Polymarket) |
+|----------|----------|-------------------------------|
+| Community forecasting | Yes | |
+| Custom market creation | Yes | |
+| Academic research on crowd wisdom | Yes | |
+| Casual predictions with friends | Yes | |
+| Financial trading and profit | | Yes |
+| Building automated trading bots | | Yes |
+| AI-powered analysis and signals | | Yes |
+| Cross-platform arbitrage | | Yes |
+| Portfolio management with real P&L | | Yes |
+
+Manifold is excellent for forecasting research and community engagement. For financial applications, real-money platforms provide stronger price signals and actual trading infrastructure.
+
+## Real-money prediction market APIs
+
+If you need real-money market data, AI analysis, or trading signals, the Rekko API provides unified access to Kalshi, Polymarket, and Robinhood:
+
+<CodeGroup>
+```python Python
+import httpx
+
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+
+# Real-money markets across all platforms
+markets = client.get("/markets", params={"limit": 5}).json()
+for m in markets:
+    print(f"{m['platform']:12} | {m['title'][:50]} | YES: {m['yes_price']:.2f} | Vol: ${m['volume_24h']:,.0f}")
+```
+
+```bash cURL
+curl "https://api.rekko.ai/v1/markets?limit=5" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const resp = await fetch("https://api.rekko.ai/v1/markets?limit=5", {
+  headers: { Authorization: "Bearer YOUR_API_KEY" },
+});
+const markets = await resp.json();
+```
+</CodeGroup>
+
+Beyond market data, Rekko provides AI-powered analysis, probability estimates, trading signals with Kelly sizing, cross-platform arbitrage detection, and portfolio tracking — features that go well beyond what any single platform API offers.
+
+## What's next
+
+<CardGroup cols={3}>
+  <Card title="API comparison" icon="scale-balanced" href="/docs/guides/prediction-market-api-comparison">
+    Kalshi vs Polymarket vs Robinhood — detailed comparison.
+  </Card>
+  <Card title="Build a trading bot" icon="robot" href="/docs/guides/build-trading-bot-python">
+    Step-by-step Python trading bot tutorial.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/docs/quickstart">
+    Get a free API key and start querying real-money markets.
+  </Card>
+</CardGroup>

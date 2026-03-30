@@ -1,0 +1,57 @@
+---
+title: Dashboard
+description: Manage your API key, monitor usage, and upgrade your plan.
+icon: gauge
+---
+
+The Rekko dashboard at [rekko.ai/dashboard](https://rekko.ai/dashboard) is where you manage your account.
+
+## Features
+
+- **API key display** — View your key prefix (full key is only shown once at signup)
+- **Key rotation** — Generate a new key if yours is compromised. The old key is revoked immediately.
+- **Usage stats** — See how many calls you've made this month per tier
+- **Quota tracking** — Monitor progress toward your monthly limits
+- **Plan management** — View your current plan and upgrade to Pro
+- **Billing portal** — Access Stripe billing to update payment, view invoices, or cancel
+
+## Checking usage via API
+
+You can also check your usage programmatically:
+
+```bash
+curl https://api.rekko.ai/v1/customers/me \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Response:
+
+```json
+{
+  "customer_id": "cus_xyz123",
+  "email": "you@example.com",
+  "plan": "free",
+  "status": "active",
+  "key_prefix": "rk_free_...",
+  "usage": {
+    "listing": 45,
+    "insight": 3,
+    "strategy": 0,
+    "deep": 0
+  },
+  "quotas": {
+    "listing": 100,
+    "insight": 10,
+    "strategy": 0,
+    "deep": 0
+  },
+  "resets_on": "2026-04-01"
+}
+```
+
+## Security best practices
+
+- Store your API key in environment variables, never in source code
+- Rotate your key immediately if it may have been exposed
+- Use separate keys for development and production if you have multiple environments
+- Monitor the `usage` field to detect unexpected consumption

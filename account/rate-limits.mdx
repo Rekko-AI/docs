@@ -1,0 +1,63 @@
+---
+title: Rate Limits
+description: Per-endpoint rate limits and how to handle 429 responses.
+icon: gauge-max
+---
+
+## Limits by plan
+
+| Plan | General endpoints | Strategy endpoints |
+|------|-------------------|-------------------|
+| **Free** | 30 req/min | — |
+| **Pro** | 120 req/min | 5 req/min |
+| **Enterprise** | Custom | Custom |
+
+Strategy endpoints (`POST /v1/signals`, `POST /v1/signals/portfolio`) have a separate, lower rate limit because they trigger computationally expensive research pipelines.
+
+## 429 responses
+
+When you exceed a rate limit, the API returns `429 Too Many Requests`:
+
+```json
+{
+  "detail": "Rate limit exceeded. Try again in 2 seconds."
+}
+```
+
+The `Retry-After` header tells you how long to wait (in seconds).
+
+## Best practices
+
+### Exponential backoff
+
+When you receive a 429, wait and retry with increasing delays:
+
+```python
+import time
+import httpx
+
+def request_with_backoff(client, method, url, **kwargs):
+    for attempt in range(5):
+        resp = client.request(method, url, **kwargs)
+        if resp.status_code != 429:
+            return resp
+        wait = min(2 ** attempt, 30)  # 1s, 2s, 4s, 8s, 16s
+        time.sleep(wait)
+    return resp  # Return last response after all retries
+```
+
+### Cache responses
+
+Analysis results are deterministic for a given market at a point in time. Cache them locally to avoid redundant calls:
+
+- **Market listings** — Cache for 1-5 minutes
+- **Analyses** — Cache based on the `freshness` field (fresh = valid for hours)
+- **Arbitrage feed** — Cache for 1-5 minutes (use `/arbitrage/live` for real-time)
+- **Calibration** — Cache for hours (changes slowly)
+
+### Batch with screening
+
+Instead of calling `GET /v1/markets/{platform}/{market_id}` for each market individually, use:
+
+- `GET /v1/markets?limit=100` to list markets in bulk (1 call vs 100)
+- `POST /v1/screen` to filter markets server-side before analyzing individually

@@ -1,0 +1,116 @@
+---
+title: Causal Decomposition
+description: How Rekko breaks down probability into explainable causal factors.
+icon: diagram-project
+---
+
+Causal decomposition is what makes Rekko different from a simple odds aggregator. Instead of just giving you a number, Rekko explains **why** it estimates a given probability by breaking it into weighted causal factors with Bayesian updates.
+
+## What you get
+
+Request `?expand=causal` on any analysis or signal endpoint:
+
+```json
+{
+  "causal": {
+    "overall_probability": 0.74,
+    "overall_confidence": 0.73,
+    "method": "weighted_bayesian",
+    "factors": [
+      {
+        "claim": "Recent inflation data supports a rate cut",
+        "direction": "supports_yes",
+        "weight": 0.35,
+        "confidence": 0.82,
+        "prior": 0.50,
+        "posterior": 0.78,
+        "evidence": [
+          "CPI fell to 2.1% in February, below 2.3% forecast",
+          "Core PCE at 2.4%, trending toward 2% target"
+        ]
+      },
+      {
+        "claim": "Labor market remains tight",
+        "direction": "supports_no",
+        "weight": 0.25,
+        "confidence": 0.71,
+        "prior": 0.50,
+        "posterior": 0.35,
+        "evidence": [
+          "Unemployment at 3.7%, near historic lows",
+          "Wage growth at 4.1% YoY"
+        ]
+      },
+      {
+        "claim": "Fed forward guidance signals openness to cuts",
+        "direction": "supports_yes",
+        "weight": 0.40,
+        "confidence": 0.68,
+        "prior": 0.50,
+        "posterior": 0.82,
+        "evidence": [
+          "Powell's February testimony noted 'progress on inflation'",
+          "Dot plot median shifted down by 25bps"
+        ]
+      }
+    ],
+    "generated_at": "2026-03-24T14:30:00Z"
+  }
+}
+```
+
+## Factor anatomy
+
+Each `CausalFactor` represents one driver of the outcome:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `claim` | string | What this factor asserts |
+| `direction` | string | `"supports_yes"`, `"supports_no"`, or `"neutral"` |
+| `weight` | float (0-1) | Relative importance — weights across factors sum to ~1.0 |
+| `confidence` | float (0-1) | How confident Rekko is in this specific factor |
+| `prior` | float (0-1) | Base rate probability before evidence |
+| `posterior` | float (0-1) | Updated probability after incorporating evidence |
+| `evidence` | string[] | Key evidence supporting this factor |
+
+## How it works
+
+1. **Factor identification** — The research pipeline identifies 3-7 independent causal drivers of the outcome
+2. **Prior estimation** — Each factor starts with a base rate (prior) drawn from historical patterns
+3. **Evidence gathering** — Deep web research collects relevant evidence for each factor
+4. **Bayesian update** — Each factor's prior is updated to a posterior based on the evidence strength
+5. **Weighted aggregation** — Factors are combined using their weights to produce the overall probability
+
+The `method` field indicates the aggregation approach:
+
+| Method | Description |
+|--------|-------------|
+| `weighted_bayesian` | Standard weighted Bayesian combination (default) |
+| `linear` | Simple weighted average of posteriors |
+| `log_odds` | Log-odds weighted combination |
+
+## Why this matters
+
+Most prediction market APIs just give you a price. Rekko gives you the **reasoning chain**:
+
+- **Audit the logic** — See exactly which factors drive the estimate and whether you agree
+- **Identify blind spots** — Check if important factors are missing from the decomposition
+- **Track changes** — When you re-analyze later, see which factors shifted and why
+- **Override confidently** — If you have domain expertise on a specific factor, you can judge whether the overall estimate is too high or too low
+
+## Requesting causal decomposition
+
+Add `?expand=causal` to any analysis or signal endpoint:
+
+```bash
+# On an analysis
+curl "https://api.rekko.ai/v1/markets/kalshi/KXFED-26MAR19/analysis?expand=causal" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# On a signal
+curl -X POST https://api.rekko.ai/v1/signals \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"platform": "kalshi", "market_id": "KXFED-26MAR19"}' \
+  | jq '.causal.factors[] | {claim, direction, weight, posterior}'
+```

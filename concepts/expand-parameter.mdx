@@ -1,0 +1,96 @@
+---
+title: Expand Parameter
+description: Request additional nested data with ?expand=.
+icon: arrows-maximize
+---
+
+Many endpoints support the `?expand=` query parameter to include additional nested data in the response. This keeps default responses lightweight while giving you access to deeper information on demand.
+
+## Usage
+
+Pass a comma-separated list of expansion names:
+
+```bash
+curl "https://api.rekko.ai/v1/markets/kalshi/KXFED-26MAR19/analysis?expand=causal,scenarios,meta" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Available expansions
+
+| Expansion | Available on | Description |
+|-----------|-------------|-------------|
+| `causal` | Analysis, Signals | [Causal factor decomposition](/concepts/causal-decomposition) with Bayesian priors/posteriors, weights, and evidence |
+| `scenarios` | Analysis | Bull/base/bear scenario assessments, each with probability, description, and trigger conditions |
+| `meta` | Analysis | Pipeline metadata: what would change our mind, edge assessment, models used, processing duration |
+| `history` | Markets | Embed price history directly in the market response |
+| `analysis` | Markets | Embed the latest analysis in a market listing |
+| `scoring` | Arbitrage | Detailed scoring breakdown: spread score, liquidity score, match confidence score, execution score |
+
+## Expansion details
+
+### `causal`
+
+Adds a `causal` object with the full [CausalDecomposition](/concepts/causal-decomposition) — 3-7 weighted factors with Bayesian priors, posteriors, evidence, and an aggregation method.
+
+### `scenarios`
+
+Adds a `scenarios` array with typically 3 scenario assessments:
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "Bull",
+      "probability": 0.35,
+      "description": "Fed cuts by 25bps, signals further easing",
+      "trigger": "CPI continues declining, unemployment ticks up"
+    },
+    {
+      "name": "Base",
+      "probability": 0.45,
+      "description": "Fed holds rates, dovish language",
+      "trigger": "Inflation at target but labor market stable"
+    },
+    {
+      "name": "Bear",
+      "probability": 0.20,
+      "description": "Fed holds rates, hawkish surprise",
+      "trigger": "Inflation rebounds or external shock"
+    }
+  ]
+}
+```
+
+### `meta`
+
+Adds an `meta` object with pipeline internals:
+
+```json
+{
+  "meta": {
+    "what_would_change_mind": "A surprise inflation reading above 3% or an unexpected geopolitical event",
+    "edge_assessment": "Moderate edge driven by inflation trend divergence from market pricing",
+    "models_used": ["research", "synthesis", "analysis", "summarization"],
+    "duration_ms": 47200
+  }
+}
+```
+
+### `scoring` (arbitrage only)
+
+Adds individual score components to each arbitrage opportunity:
+
+```json
+{
+  "spread_score": 82.5,
+  "liquidity_score": 65.0,
+  "match_confidence_score": 91.0,
+  "execution_score": 70.0
+}
+```
+
+Weights: spread 40%, liquidity 20%, match confidence 20%, execution 20%.
+
+## Default behavior
+
+Without `?expand=`, expandable fields are omitted from the response. This keeps payloads small for listing and screening use cases. Request only the expansions you need.

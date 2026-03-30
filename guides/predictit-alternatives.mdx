@@ -1,0 +1,151 @@
+---
+title: "PredictIt Alternatives"
+sidebarTitle: "PredictIt Alternatives"
+"og:title": "PredictIt Alternatives 2026 — Where to Trade Prediction Markets After PredictIt Shutdown"
+description: "PredictIt is winding down. Here are the active prediction market platforms in 2026: Kalshi, Polymarket, and Robinhood. API access, trading features, and how to migrate."
+icon: arrow-right-arrow-left
+---
+
+## What this page covers
+
+- What happened to PredictIt
+- Active prediction market platforms in 2026
+- Feature comparison: Kalshi, Polymarket, Robinhood
+- API access and programmatic trading on each platform
+- How to build on top of modern prediction market APIs
+
+---
+
+## What happened to PredictIt
+
+PredictIt operated under a CFTC no-action letter that allowed it to offer binary political prediction markets. In 2022, the CFTC withdrew that letter, ordering PredictIt to wind down operations. The platform stopped accepting new markets and began closing existing ones.
+
+PredictIt's winding down left a gap for political and event prediction markets — but several platforms have since filled and expanded that space.
+
+## Active platforms in 2026
+
+### Kalshi
+
+Kalshi is the first CFTC-regulated prediction market exchange in the United States. It operates as a designated contract market (DCM), giving it a permanent regulatory framework rather than a temporary no-action letter.
+
+| Feature | Details |
+|---------|---------|
+| Regulation | CFTC-regulated DCM |
+| Markets | Economics, politics, crypto, weather, entertainment, sports |
+| Currency | USD (ACH/wire deposits) |
+| API | Full REST API at `trading-api.kalshi.com` |
+| Auth | RSA-PSS signed headers |
+| Python SDK | `kalshi-python` (community) |
+| Fees | Maker: free. Taker: `0.07 × price × (1-price)` |
+| Programmatic trading | Yes, encouraged |
+
+Kalshi covers far more categories than PredictIt ever did — beyond politics, it offers markets on Fed rate decisions, inflation data, temperature records, box office results, and cryptocurrency prices.
+
+<Card title="Kalshi API guide" icon="chart-line" href="/docs/guides/kalshi-api-guide">
+  Full developer guide: authentication, endpoints, market data, and code examples.
+</Card>
+
+### Polymarket
+
+Polymarket is the largest prediction market by volume globally. It is crypto-native, built on Polygon, and uses USDC for settlement.
+
+| Feature | Details |
+|---------|---------|
+| Regulation | Not CFTC-regulated (offshore) |
+| Markets | Politics, crypto, AI, science, sports, entertainment |
+| Currency | USDC on Polygon |
+| API | Gamma Markets API (read) + CLOB API (trade) |
+| Auth | HMAC-SHA256 signed requests |
+| Python SDK | `py-clob-client` (official) |
+| Fees | Low maker/taker fees |
+| Programmatic trading | Yes, via CLOB API |
+
+Polymarket has the deepest liquidity and broadest market coverage. It attracts a global, crypto-native audience.
+
+<Card title="Polymarket API guide" icon="chart-scatter" href="/docs/guides/polymarket-api-guide">
+  Full developer guide: CLOB, Gamma API, py-clob-client, condition IDs, and code examples.
+</Card>
+
+### Robinhood
+
+Robinhood added event contracts (prediction markets) to its existing brokerage platform, bringing prediction markets to a mainstream retail audience.
+
+| Feature | Details |
+|---------|---------|
+| Regulation | SEC/FINRA-regulated brokerage |
+| Markets | Politics, economics, select events |
+| Currency | USD (existing Robinhood account) |
+| API | Limited public API for event data |
+| Programmatic trading | Limited |
+
+Robinhood's prediction markets are accessible to anyone with a Robinhood account, but the API surface for programmatic trading is more limited than Kalshi or Polymarket.
+
+## Comparison: PredictIt vs modern platforms
+
+| Feature | PredictIt (legacy) | Kalshi | Polymarket | Robinhood |
+|---------|-------------------|--------|------------|-----------|
+| Status | Winding down | Active | Active | Active |
+| Regulation | CFTC no-action (withdrawn) | CFTC DCM | None (offshore) | SEC/FINRA |
+| Categories | Politics only | 10+ categories | 10+ categories | Select events |
+| Max position | $850 | No cap | No cap | Varies |
+| API access | Read-only | Full REST | Full REST + CLOB | Limited |
+| Programmatic trading | No | Yes | Yes | Limited |
+| Settlement | USD | USD | USDC | USD |
+
+### Key improvements over PredictIt
+
+- **No $850 position limit**: Kalshi and Polymarket allow unlimited position sizes
+- **More categories**: Economics, crypto, weather, entertainment — not just politics
+- **Real APIs**: Full REST APIs with order placement, position management, and streaming
+- **Lower fees**: Kalshi maker orders are free; Polymarket has competitive fees
+- **Faster settlement**: Markets resolve and pay out within hours, not days
+
+## Building on modern prediction market APIs
+
+If you previously built tools for PredictIt, the modern ecosystem is much more developer-friendly:
+
+<CodeGroup>
+```python Python
+import httpx
+
+# Unified access to Kalshi + Polymarket + Robinhood via Rekko
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+
+# List markets across all platforms
+markets = client.get("/markets", params={"limit": 10}).json()
+for m in markets:
+    print(f"{m['platform']:12} | {m['title'][:50]:50} | YES: {m['yes_price']:.2f}")
+```
+
+```bash cURL
+curl "https://api.rekko.ai/v1/markets?limit=10" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const resp = await fetch("https://api.rekko.ai/v1/markets?limit=10", {
+  headers: { Authorization: "Bearer YOUR_API_KEY" },
+});
+const markets = await resp.json();
+markets.forEach((m) => console.log(`${m.platform} | ${m.title} | YES: ${m.yes_price}`));
+```
+</CodeGroup>
+
+Rekko provides a unified API layer that normalizes data across all three platforms, adds AI-powered analysis, and provides trading signals — capabilities that were never available with PredictIt.
+
+## What's next
+
+<CardGroup cols={3}>
+  <Card title="API comparison" icon="scale-balanced" href="/docs/guides/prediction-market-api-comparison">
+    Detailed comparison of Kalshi, Polymarket, and Robinhood APIs.
+  </Card>
+  <Card title="Build a trading bot" icon="robot" href="/docs/guides/build-trading-bot-python">
+    Step-by-step tutorial for a Python trading bot.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/docs/quickstart">
+    Get a free API key and make your first call.
+  </Card>
+</CardGroup>

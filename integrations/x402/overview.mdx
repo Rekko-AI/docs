@@ -31,10 +31,23 @@ Per-call pricing matches the [subscription tiers](/pricing):
     You need a wallet with USDC on [Base](https://base.org) (Coinbase's L2 network). Bridge from Ethereum mainnet or purchase directly.
   </Step>
   <Step title="Install an x402 client">
-    Use any x402-compatible HTTP client. The protocol is an open standard.
+    Use the `RekkoClient` from the [rekko-skill](https://github.com/Rekko-AI/rekko-skill) repo, or any x402-compatible HTTP client:
+
+    ```bash
+    pip install httpx "x402[fastapi]" eth-account
+    ```
   </Step>
   <Step title="Make requests">
-    Point your client at `https://api.rekko.ai` — payments are handled automatically per request.
+    ```python
+    from eth_account import Account
+    from rekko_tools import RekkoClient
+
+    signer = Account.from_key("0x<your-private-key>")
+    async with RekkoClient(signer=signer) as client:
+        markets = await client.list_markets()
+    ```
+
+    Or set `X402_PRIVATE_KEY` in your environment for auto-detection. Payments are handled automatically per request.
   </Step>
 </Steps>
 

@@ -1,0 +1,274 @@
+---
+title: "MCP Trading Workflow"
+sidebarTitle: "MCP Workflow"
+"og:title": "MCP for Prediction Markets — AI-Powered Trading Research with Claude Code and Cursor"
+description: "Use Rekko's MCP server to research prediction markets from your AI coding assistant. Install rekko-mcp, browse markets, run deep analysis, find arbitrage, and manage a portfolio — all via natural language."
+icon: plug
+---
+
+```bash
+# Install in one command
+uvx rekko-mcp
+```
+
+## What this page covers
+
+- What MCP is and why it matters for prediction market research
+- Installing and configuring `rekko-mcp` for Claude Code and Cursor
+- Workflow examples: screening, analysis, arbitrage, portfolio
+- Available MCP tools (25+)
+- When to use MCP vs the REST API
+
+---
+
+## What is MCP?
+
+The Model Context Protocol (MCP) lets AI coding assistants call external tools during a conversation. Instead of copy-pasting API calls, you describe what you want in natural language and the assistant uses the right API endpoints automatically.
+
+Rekko's MCP server (`rekko-mcp`) exposes 25+ tools covering market data, deep analysis, trading signals, arbitrage detection, and portfolio management. Your AI assistant calls these tools behind the scenes while you focus on the research question.
+
+## Installation
+
+### Requirements
+
+- Python 3.10+
+- A Rekko API key ([sign up free](https://rekko.ai/dashboard))
+
+### Claude Code
+
+<CodeGroup>
+```bash Plugin install (recommended)
+claude plugin install rekko
+```
+
+```json Manual .mcp.json
+{
+  "mcpServers": {
+    "rekko": {
+      "command": "uvx",
+      "args": ["rekko-mcp"],
+      "env": {
+        "REKKO_API_KEY": "rk_free_your_key_here"
+      }
+    }
+  }
+}
+```
+</CodeGroup>
+
+### Cursor
+
+Create or edit `.cursor/mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "rekko": {
+      "command": "uvx",
+      "args": ["rekko-mcp"],
+      "env": {
+        "REKKO_API_KEY": "rk_free_your_key_here"
+      }
+    }
+  }
+}
+```
+
+### Verify installation
+
+Ask your assistant: "List the top 5 prediction markets by volume." If `rekko-mcp` is configured correctly, it will call the `list_markets` tool and return formatted results.
+
+## Workflow examples
+
+### 1. Market screening
+
+**You say:** "Find Kalshi markets with high volume that might have mispriced odds."
+
+**What happens behind the scenes:**
+1. Assistant calls `list_markets(source="kalshi", limit=20)` to fetch active markets
+2. Calls `screen_markets(...)` to score them by volume, movement, and category
+3. Presents the top candidates with scores and recommended actions
+
+**Example output:**
+```
+Top Kalshi markets by opportunity score:
+
+1. KXFED-26APR30 — "Fed rate decision April 2026"
+   Score: 82 | Volume: $1.2M | Action: analyze
+
+2. KXBITCOIN-26APR — "Bitcoin above $150K by April?"
+   Score: 74 | Volume: $890K | Action: analyze
+
+3. KXINFLATION-26MAY — "CPI above 2.5% in May?"
+   Score: 68 | Volume: $540K | Action: watch
+```
+
+### 2. Deep analysis
+
+**You say:** "Analyze the Fed rate decision market on Kalshi. I want to understand the key factors driving the price."
+
+**What happens:**
+1. Calls `analyze_market(bet_text="Fed rate decision April 2026", platform="kalshi")`
+2. Returns an `analysis_id` — the research pipeline takes 30-90 seconds
+3. Polls `check_analysis_status(analysis_id)` until complete
+4. Retrieves the full analysis with probability, confidence, edge, key factors, and risks
+
+**Example output:**
+```
+Analysis complete for KXFED-26APR30:
+
+Probability: 71% (market: 62%) — Edge: +9 points
+Confidence: 82% | Risk: low
+Recommendation: BUY YES
+
+Key factors:
+- PCE inflation at 2.1% — within Fed's comfort zone
+- Three FOMC members signaled openness to cuts
+- Jobless claims trending upward (225K → 238K)
+
+Risks:
+- Strong employment report could reverse dovish signals
+- Tariff escalation could reignite inflation expectations
+
+Sources analyzed: 14
+```
+
+### 3. Arbitrage hunting
+
+**You say:** "Are there any arbitrage opportunities between Kalshi and Polymarket right now?"
+
+**What happens:**
+1. Calls `get_arbitrage(min_spread=0.02)` for cached results (instant)
+2. If you ask for fresh data, calls `get_arbitrage_live(min_spread=0.02)` (10-30 seconds)
+3. Returns matched events with spreads, scores, and which platform is cheaper
+
+### 4. Portfolio management
+
+**You say:** "Show my shadow portfolio and suggest what to do next."
+
+**What happens:**
+1. Calls `get_portfolio(mode="shadow")` to list open positions
+2. Calls `get_performance(mode="shadow")` for aggregate stats
+3. May call `check_resolutions()` to settle any resolved markets
+4. Presents positions, P&L, win rate, and suggestions
+
+### 5. Trading signals
+
+**You say:** "Should I buy the Bitcoin $150K market? I have a $10K bankroll and already hold positions in the Fed rate market."
+
+**What happens:**
+1. Calls `get_portfolio_strategy(...)` with your current positions and bankroll
+2. Returns a portfolio-aware signal accounting for correlation between positions
+3. Includes Kelly-optimal size, hedge recommendations, and concentration warnings
+
+### 6. Market data refresh
+
+**You say:** "Refresh the Kalshi market data."
+
+**What happens:**
+1. Calls `run_scraper(platform="kalshi")` to pull the latest markets
+2. Fresh data is available for subsequent queries
+
+## Available tools
+
+### Market intelligence
+| Tool | Description |
+|------|------------|
+| `list_markets` | Browse active markets, filter by platform |
+| `get_market` | Get a single market with pricing data |
+| `search_markets` | Search markets by text query |
+| `get_market_history` | Price and volume history (48h, 7d, 30d) |
+| `get_resolution` | Resolution timing and mechanism |
+| `get_execution_guidance` | Optimal trade execution analysis |
+
+### Screening and discovery
+| Tool | Description |
+|------|------------|
+| `screen_markets` | Batch score markets with volume and movement filters |
+| `get_calibration` | Signal accuracy metrics (free, no auth) |
+
+### Deep research
+| Tool | Description |
+|------|------------|
+| `analyze_market` | Trigger a deep AI analysis pipeline (async) |
+| `check_analysis_status` | Poll analysis progress |
+| `get_analysis` | Retrieve completed analysis |
+| `list_analyses` | Browse recent analyses |
+
+### Strategy and portfolio
+| Tool | Description |
+|------|------------|
+| `get_strategy` | Trading signal with Kelly sizing (blocks 30-90s) |
+| `get_portfolio_strategy` | Portfolio-aware signal with correlation |
+| `get_consensus` | Aggregated agent consensus probability |
+
+### Arbitrage
+| Tool | Description |
+|------|------------|
+| `get_arbitrage` | Cached cross-platform opportunities |
+| `get_arbitrage_live` | Fresh scan (10-30 seconds) |
+
+### Correlation
+| Tool | Description |
+|------|------------|
+| `get_correlation` | Cross-market correlation analysis |
+
+### Trading
+| Tool | Description |
+|------|------------|
+| `place_shadow_trade` | Paper trade for tracking |
+| `report_trade` | Report a trade for consensus aggregation |
+| `get_portfolio` | Current positions and P&L |
+| `get_performance` | Win rate, ROI, and edge metrics |
+| `check_resolutions` | Settle resolved markets |
+
+### Data refresh
+| Tool | Description |
+|------|------------|
+| `run_scraper` | Refresh market data from a platform |
+
+### Webhooks
+| Tool | Description |
+|------|------------|
+| `create_webhook` | Register event webhook |
+| `list_webhooks` | List your webhooks |
+| `delete_webhook` | Remove a webhook |
+
+## MCP vs REST API
+
+| Scenario | Use MCP | Use REST API |
+|----------|---------|-------------|
+| Interactive research in your IDE | Yes | |
+| Automated trading bot | | Yes |
+| Quick market check during coding | Yes | |
+| Production pipeline | | Yes |
+| Portfolio review | Yes | |
+| Webhook/streaming integration | | Yes |
+| One-off analysis during development | Yes | |
+| Scheduled batch processing | | Yes |
+
+MCP is ideal for exploratory research and ad-hoc queries. The REST API is better for automated systems that run without human interaction.
+
+## Tips for effective MCP usage
+
+**Be specific about platforms.** "Show me Kalshi markets" is faster than "show me markets" because the tool skips Polymarket data.
+
+**Request expansions explicitly.** "Analyze this market and show me the causal factors" triggers the `?expand=causal` parameter automatically.
+
+**Chain analyses.** "Analyze the top 3 markets from that screening" works — the assistant remembers prior results and makes sequential tool calls.
+
+**Use shadow trading.** "Place a shadow trade on the Fed market, $500 on YES" lets you track performance without risking real money.
+
+## What's next
+
+<CardGroup cols={3}>
+  <Card title="MCP tools reference" icon="list" href="/docs/integrations/mcp/tools-reference">
+    Full parameter documentation for all 25+ tools.
+  </Card>
+  <Card title="Build a trading bot" icon="robot" href="/docs/guides/build-trading-bot-python">
+    When you are ready to automate, use the REST API.
+  </Card>
+  <Card title="REST API quickstart" icon="rocket" href="/docs/quickstart">
+    Get an API key and make your first call in 5 minutes.
+  </Card>
+</CardGroup>

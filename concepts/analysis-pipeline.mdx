@@ -1,0 +1,121 @@
+---
+title: Analysis Pipeline
+description: How Rekko's async research pipeline works.
+icon: flask
+---
+
+Rekko's analysis pipeline runs deep multi-stage research on a market. This takes 30-90 seconds, so it uses an **async pattern**: trigger, poll, retrieve.
+
+## The three-step pattern
+
+<Steps>
+  <Step title="Trigger">
+    `POST /v1/markets/{platform}/{market_id}/analyze`
+
+    Returns `202 Accepted` immediately with an `analysis_id` and `poll_url`.
+
+    ```json
+    {
+      "analysis_id": "rk-abc123",
+      "status": "running",
+      "poll_url": "/v1/markets/kalshi/KXFED-26MAR19/analyze/rk-abc123/status",
+      "estimated_seconds": 60
+    }
+    ```
+  </Step>
+
+  <Step title="Poll">
+    `GET /v1/markets/{platform}/{market_id}/analyze/{analysis_id}/status`
+
+    Poll every 5 seconds until `status` changes to `"complete"` or `"error"`.
+
+    ```json
+    {
+      "analysis_id": "rk-abc123",
+      "status": "complete"
+    }
+    ```
+  </Step>
+
+  <Step title="Retrieve">
+    `GET /v1/markets/{platform}/{market_id}/analysis`
+
+    Returns the full [Analysis object](#the-analysis-object) with probability, confidence, edge, recommendation, and optional expansions.
+  </Step>
+</Steps>
+
+## Complete example
+
+```python
+import time
+import httpx
+
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+
+# 1. Trigger
+resp = client.post("/markets/kalshi/KXFED-26MAR19/analyze")
+analysis_id = resp.json()["analysis_id"]
+
+# 2. Poll
+while True:
+    status = client.get(
+        f"/markets/kalshi/KXFED-26MAR19/analyze/{analysis_id}/status"
+    ).json()
+    if status["status"] == "complete":
+        break
+    if status["status"] == "error":
+        raise Exception(status.get("error_message", "Analysis failed"))
+    time.sleep(5)
+
+# 3. Retrieve (with causal decomposition)
+analysis = client.get(
+    "/markets/kalshi/KXFED-26MAR19/analysis",
+    params={"expand": "causal,scenarios"},
+).json()
+
+print(f"Probability: {analysis['probability']}")
+print(f"Edge: {analysis['edge']}")
+print(f"Recommendation: {analysis['recommendation']}")
+```
+
+## The Analysis object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `probability` | float (0-1) | Rekko's estimated true probability |
+| `confidence` | float (0-1) | Confidence in the estimate |
+| `edge` | float | `probability - market_price` (positive = underpriced YES) |
+| `recommendation` | string | `"BUY_YES"`, `"BUY_NO"`, or `"NO_TRADE"` |
+| `risk_rating` | string | `"low"`, `"medium"`, or `"high"` |
+| `summary` | string | Executive summary |
+| `key_factors` | string[] | Top probability drivers |
+| `risks` | string[] | Ways the analysis could be wrong |
+| `source_count` | integer | Number of sources analyzed |
+| `freshness` | string | `"fresh"` (&lt;24h), `"stale"` (24-72h), `"expired"` (&gt;72h) |
+
+## Caching and freshness
+
+Analyses are cached. The `freshness` field tells you how stale the result is:
+
+| Freshness | Age | Meaning |
+|-----------|-----|---------|
+| `fresh` | &lt; 24 hours | Recent, likely still accurate |
+| `stale` | 24-72 hours | May have drifted, consider re-triggering |
+| `expired` | &gt; 72 hours | Likely outdated, re-trigger recommended |
+
+To force a fresh analysis even when a cached one exists, use `?force=true` on the trigger endpoint.
+
+## Expandable fields
+
+Add `?expand=scenarios,causal,meta` to the retrieve step for deeper data:
+
+| Expansion | What it adds |
+|-----------|-------------|
+| `scenarios` | Bull/base/bear scenario assessments with probabilities and triggers |
+| `causal` | [Causal factor decomposition](/concepts/causal-decomposition) — Rekko's key differentiator |
+| `meta` | Pipeline metadata: what would change our mind, edge assessment, duration |
+
+See [Expand Parameter](/concepts/expand-parameter) for the full reference.

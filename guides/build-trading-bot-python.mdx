@@ -1,0 +1,733 @@
+---
+title: "Build a Trading Bot with Python"
+sidebarTitle: "Python Trading Bot"
+"og:title": "Build a Prediction Market Trading Bot with Python — Kalshi & Polymarket Tutorial"
+description: "Step-by-step tutorial to build a prediction market trading bot in Python. Screen markets, get AI analysis, generate signals with Kelly sizing, and track performance."
+icon: robot
+---
+
+```python TL;DR — the complete bot in 15 lines
+import httpx, time
+
+client = httpx.Client(base_url="https://api.rekko.ai/v1", headers={"Authorization": "Bearer YOUR_API_KEY"}, timeout=120.0)
+top = client.post("/screen", json={"platform": "kalshi", "min_volume_24h": 10000, "min_score": 50, "limit": 5}).json()
+market = top[0]
+resp = client.post(f"/markets/{market['platform']}/{market['market_id']}/analyze")
+analysis_id = resp.json()["analysis_id"]
+while client.get(f"/markets/{market['platform']}/{market['market_id']}/analyze/{analysis_id}/status").json()["status"] != "complete":
+    time.sleep(5)
+signal = client.post("/signals", params={"wait": "true"}, json={"market": f"{market['platform']}/{market['market_id']}", "risk_limit": "medium"}).json()
+if signal["recommendation"] != "NO_TRADE":
+    side = "yes" if "YES" in signal["recommendation"] else "no"
+    trade = client.post("/trades/shadow", json={"ticker": market["market_id"], "platform": market["platform"], "side": side, "size_usd": signal["size_pct"] * 10000}).json()
+    print(f"Trade placed: {trade['trade_id']} | {side.upper()} @ ${signal['size_pct'] * 10000:.0f}")
+```
+
+## What this page covers
+
+- Screening Kalshi and Polymarket for high-volume, high-edge opportunities
+- Running AI-powered analysis on promising markets (async trigger/poll/retrieve pattern)
+- Generating trading signals with Kelly criterion position sizing
+- Executing paper trades via shadow trading to validate your strategy
+- Tracking portfolio performance (win rate, P&L, open positions)
+- Extending the bot with scheduling, webhooks, arbitrage, and portfolio-aware signals
+
+## Prerequisites
+
+| Requirement | Why |
+|-------------|-----|
+| **Python 3.10+** | Type hints and `match` statements used in examples |
+| **httpx** | HTTP client — `pip install httpx` or `uv add httpx` |
+| **Rekko API key** | [Sign up free](https://rekko.ai/dashboard) — no credit card required |
+| **Platform credentials** (optional) | Kalshi or Polymarket API keys for live order execution |
+
+<Tip>
+  The Free plan includes 100 market listing calls and 10 analysis calls per month — enough to follow this entire tutorial. See [Pricing](/pricing) for details.
+</Tip>
+
+## Step-by-step tutorial
+
+<Steps>
+  <Step title="Set up the client">
+
+    Create an authenticated client that you will reuse for every call. Set a generous timeout because analysis calls run a multi-stage research pipeline that takes 30-90 seconds.
+
+    <CodeGroup>
+    ```python Python
+    import httpx
+
+    API_KEY = "YOUR_API_KEY"  # Replace with your key from https://rekko.ai/dashboard
+
+    client = httpx.Client(
+        base_url="https://api.rekko.ai/v1",
+        headers={"Authorization": f"Bearer {API_KEY}"},
+        timeout=120.0,  # Analysis can take 30-90 seconds
+    )
+
+    # Verify the key works
+    me = client.get("/customers/me").json()
+    print(f"Authenticated as {me['email']} ({me['plan']} plan)")
+    ```
+
+    ```bash cURL
+    # Set your key as an environment variable
+    export REKKO_API_KEY="YOUR_API_KEY"
+
+    # Verify the key works
+    curl https://api.rekko.ai/v1/customers/me \
+      -H "Authorization: Bearer $REKKO_API_KEY"
+    ```
+
+    ```javascript JavaScript
+    const API_KEY = "YOUR_API_KEY"; // Replace with your key from https://rekko.ai/dashboard
+    const BASE_URL = "https://api.rekko.ai/v1";
+    const headers = { Authorization: `Bearer ${API_KEY}` };
+
+    // Verify the key works
+    const me = await fetch(`${BASE_URL}/customers/me`, { headers }).then((r) =>
+      r.json()
+    );
+    console.log(`Authenticated as ${me.email} (${me.plan} plan)`);
+    ```
+    </CodeGroup>
+
+  </Step>
+
+  <Step title="Screen markets for opportunities">
+
+    The screening endpoint scores markets across a platform and returns the top candidates ranked by a composite of volume, price movement, and edge potential. Use it to find markets worth analyzing.
+
+    <CodeGroup>
+    ```python Python
+    screen = client.post("/screen", json={
+        "platform": "kalshi",
+        "min_volume_24h": 10000,
+        "min_score": 50,
+        "limit": 10,
+    }).json()
+
+    print(f"Found {len(screen)} markets above threshold:\n")
+    for r in screen:
+        print(f"  {r['market_id']:<30} | Score: {r['score']:>3} | {r['title'][:50]}")
+    ```
+
+    ```bash cURL
+    curl -X POST https://api.rekko.ai/v1/screen \
+      -H "Authorization: Bearer $REKKO_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "platform": "kalshi",
+        "min_volume_24h": 10000,
+        "min_score": 50,
+        "limit": 10
+      }'
+    ```
+
+    ```javascript JavaScript
+    const screen = await fetch(`${BASE_URL}/screen`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        platform: "kalshi",
+        min_volume_24h: 10000,
+        min_score: 50,
+        limit: 10,
+      }),
+    }).then((r) => r.json());
+
+    screen.forEach((r) => {
+      console.log(`${r.market_id} | Score: ${r.score} | ${r.title}`);
+    });
+    ```
+    </CodeGroup>
+
+    Each result includes:
+
+    | Field | Description |
+    |-------|-------------|
+    | `market_id` | Platform-specific ticker (e.g. `KXFED-26MAR19`) |
+    | `platform` | `"kalshi"` or `"polymarket"` |
+    | `title` | Human-readable market question |
+    | `score` | Composite opportunity score (0-100) |
+    | `volume_24h` | 24-hour trading volume in dollars |
+    | `yes_price` | Current YES contract price (0-1) |
+    | `action` | Quick recommendation: `"ANALYZE"`, `"WATCH"`, or `"SKIP"` |
+
+    Filter by category to focus on a specific domain:
+
+    ```python Python
+    # Screen only politics markets on Polymarket
+    politics = client.post("/screen", json={
+        "platform": "polymarket",
+        "category": "politics",
+        "min_volume_24h": 5000,
+        "min_score": 40,
+        "limit": 10,
+    }).json()
+    ```
+
+  </Step>
+
+  <Step title="Get AI analysis on promising markets">
+
+    Analysis runs a multi-stage research pipeline that takes 30-90 seconds. The pattern is: **trigger**, **poll**, **retrieve**.
+
+    <CodeGroup>
+    ```python Python
+    import time
+
+    # Pick the top-scored market
+    market = screen[0]
+    platform = market["platform"]
+    market_id = market["market_id"]
+
+    # 1. Trigger analysis
+    resp = client.post(f"/markets/{platform}/{market_id}/analyze")
+    trigger = resp.json()
+    analysis_id = trigger["analysis_id"]
+    print(f"Analysis started: {analysis_id}")
+    print(f"Estimated time: {trigger['estimated_seconds']}s")
+
+    # 2. Poll until complete
+    while True:
+        status = client.get(
+            f"/markets/{platform}/{market_id}/analyze/{analysis_id}/status"
+        ).json()
+        if status["status"] == "complete":
+            print("Analysis complete.")
+            break
+        if status["status"] == "error":
+            raise Exception(status.get("error_message", "Analysis failed"))
+        time.sleep(5)
+
+    # 3. Retrieve the full analysis
+    analysis = client.get(f"/markets/{platform}/{market_id}/analysis").json()
+
+    print(f"\n--- {analysis['title']} ---")
+    print(f"Probability:    {analysis['probability']:.0%}")
+    print(f"Confidence:     {analysis['confidence']:.0%}")
+    print(f"Edge:           {analysis['edge']:+.2f}")
+    print(f"Risk:           {analysis['risk_rating']}")
+    print(f"Recommendation: {analysis['recommendation']}")
+    print(f"Sources:        {analysis['source_count']} analyzed")
+    print(f"\nSummary: {analysis['summary']}")
+    ```
+
+    ```bash cURL
+    # 1. Trigger analysis
+    curl -X POST "https://api.rekko.ai/v1/markets/kalshi/KXFED-26MAR19/analyze" \
+      -H "Authorization: Bearer $REKKO_API_KEY"
+    # Response: {"analysis_id": "rk-abc123", "status": "running", "estimated_seconds": 60}
+
+    # 2. Poll status (repeat until "complete")
+    curl "https://api.rekko.ai/v1/markets/kalshi/KXFED-26MAR19/analyze/rk-abc123/status" \
+      -H "Authorization: Bearer $REKKO_API_KEY"
+    # Response: {"analysis_id": "rk-abc123", "status": "complete"}
+
+    # 3. Retrieve the analysis
+    curl "https://api.rekko.ai/v1/markets/kalshi/KXFED-26MAR19/analysis" \
+      -H "Authorization: Bearer $REKKO_API_KEY"
+    ```
+
+    ```javascript JavaScript
+    // Pick the top-scored market
+    const market = screen[0];
+    const { platform, market_id } = market;
+
+    // 1. Trigger analysis
+    const trigger = await fetch(
+      `${BASE_URL}/markets/${platform}/${market_id}/analyze`,
+      { method: "POST", headers }
+    ).then((r) => r.json());
+    const analysisId = trigger.analysis_id;
+
+    // 2. Poll until complete
+    let status;
+    do {
+      await new Promise((r) => setTimeout(r, 5000));
+      status = await fetch(
+        `${BASE_URL}/markets/${platform}/${market_id}/analyze/${analysisId}/status`,
+        { headers }
+      ).then((r) => r.json());
+    } while (status.status !== "complete" && status.status !== "error");
+
+    if (status.status === "error") throw new Error("Analysis failed");
+
+    // 3. Retrieve the analysis
+    const analysis = await fetch(
+      `${BASE_URL}/markets/${platform}/${market_id}/analysis`,
+      { headers }
+    ).then((r) => r.json());
+
+    console.log(`Probability: ${analysis.probability}`);
+    console.log(`Edge: ${analysis.edge}`);
+    console.log(`Recommendation: ${analysis.recommendation}`);
+    ```
+    </CodeGroup>
+
+    <Tip>
+      Add `?expand=causal,scenarios` to the retrieve call to get causal factor decomposition and bull/base/bear scenarios. See [Expand Parameter](/concepts/expand-parameter).
+    </Tip>
+
+  </Step>
+
+  <Step title="Generate a trading signal">
+
+    A signal wraps analysis into an actionable recommendation with Kelly criterion position sizing. Use `?wait=true` for a synchronous response instead of the trigger/poll pattern.
+
+    <CodeGroup>
+    ```python Python
+    signal = client.post("/signals", params={"wait": "true"}, json={
+        "market": f"{platform}/{market_id}",
+        "risk_limit": "medium",
+    }).json()
+
+    print(f"Recommendation: {signal['recommendation']}")
+    print(f"Target price:   {signal['target_price']:.2f}")
+    print(f"Edge:           {signal['edge']:+.2f}")
+    print(f"Confidence:     {signal['confidence']:.0%}")
+    print(f"Risk rating:    {signal['risk_rating']}")
+    print(f"Kelly fraction: {signal['size_pct']:.1%}")
+    print(f"Time horizon:   {signal['time_horizon']}")
+
+    # Calculate dollar size on a $10,000 bankroll
+    bankroll = 10_000
+    position_size = signal["size_pct"] * bankroll
+    print(f"\nPosition size:  ${position_size:.0f} (on ${bankroll:,} bankroll)")
+    ```
+
+    ```bash cURL
+    curl -X POST "https://api.rekko.ai/v1/signals?wait=true" \
+      -H "Authorization: Bearer $REKKO_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "market": "kalshi/KXFED-26MAR19",
+        "risk_limit": "medium"
+      }'
+    ```
+
+    ```javascript JavaScript
+    const signal = await fetch(`${BASE_URL}/signals?wait=true`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        market: `${platform}/${market_id}`,
+        risk_limit: "medium",
+      }),
+    }).then((r) => r.json());
+
+    const bankroll = 10000;
+    const positionSize = signal.size_pct * bankroll;
+    console.log(`Recommendation: ${signal.recommendation}`);
+    console.log(`Edge: ${signal.edge}`);
+    console.log(`Kelly fraction: ${signal.size_pct}`);
+    console.log(`Position size: $${positionSize.toFixed(0)} (on $${bankroll} bankroll)`);
+    ```
+    </CodeGroup>
+
+    ### Signal fields
+
+    | Field | Type | Description |
+    |-------|------|-------------|
+    | `recommendation` | string | `"BUY_YES"`, `"BUY_NO"`, or `"NO_TRADE"` |
+    | `target_price` | float | Rekko's estimated fair price (0-1) |
+    | `edge` | float | Difference between fair price and market price |
+    | `confidence` | float | Confidence in the estimate (0-1) |
+    | `risk_rating` | string | `"low"`, `"medium"`, or `"high"` |
+    | `size_pct` | float | Kelly-derived position size as fraction of bankroll |
+    | `time_horizon` | string | `"hours"`, `"days"`, or `"weeks"` |
+    | `hedge` | string | Suggested hedge position (if applicable) |
+    | `expires_at` | string | ISO 8601 timestamp — do not trade after this time |
+
+    <Warning>
+      Always check `expires_at` before acting on a signal. Market conditions change and stale signals can lead to losses.
+    </Warning>
+
+  </Step>
+
+  <Step title="Execute the trade (paper trading)">
+
+    Rekko provides intelligence — execution happens on the platform. Start with **shadow trading** (paper trades) to validate your strategy before risking real capital.
+
+    <CodeGroup>
+    ```python Python
+    if signal["recommendation"] == "NO_TRADE":
+        print("No edge found — skipping.")
+    else:
+        side = "yes" if "YES" in signal["recommendation"] else "no"
+        size_usd = signal["size_pct"] * bankroll
+
+        trade = client.post("/trades/shadow", json={
+            "ticker": market_id,
+            "platform": platform,
+            "side": side,
+            "size_usd": round(size_usd, 2),
+        }).json()
+
+        print(f"Shadow trade placed:")
+        print(f"  Trade ID:  {trade['trade_id']}")
+        print(f"  Side:      {side.upper()}")
+        print(f"  Size:      ${size_usd:.2f}")
+        print(f"  Price:     {trade['fill_price']}")
+    ```
+
+    ```bash cURL
+    curl -X POST https://api.rekko.ai/v1/trades/shadow \
+      -H "Authorization: Bearer $REKKO_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "ticker": "KXFED-26MAR19",
+        "platform": "kalshi",
+        "side": "yes",
+        "size_usd": 420.00
+      }'
+    ```
+
+    ```javascript JavaScript
+    if (signal.recommendation !== "NO_TRADE") {
+      const side = signal.recommendation.includes("YES") ? "yes" : "no";
+      const sizeUsd = Math.round(signal.size_pct * bankroll * 100) / 100;
+
+      const trade = await fetch(`${BASE_URL}/trades/shadow`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker: market_id,
+          platform,
+          side,
+          size_usd: sizeUsd,
+        }),
+      }).then((r) => r.json());
+
+      console.log(`Shadow trade placed: ${trade.trade_id}`);
+      console.log(`Side: ${side.toUpperCase()} | Size: $${sizeUsd}`);
+    }
+    ```
+    </CodeGroup>
+
+    Shadow trades track the market price at entry, simulate fills, and resolve automatically when the market settles. They cost nothing and use the same tracking infrastructure as live trades.
+
+    ### When you are ready for live execution
+
+    Rekko does not execute live trades on your behalf. Use the execution guidance endpoint to get platform-specific order parameters, then place the order using your platform's API:
+
+    ```python Python
+    # Get execution guidance (includes platform-specific order params)
+    guidance = client.post("/strategy/execution-guidance", json={
+        "market": f"{platform}/{market_id}",
+        "side": side,
+        "size_usd": size_usd,
+    }).json()
+
+    print(f"Limit price:  {guidance['limit_price']}")
+    print(f"Order type:   {guidance['order_type']}")
+    print(f"Platform URL: {guidance['platform_url']}")
+
+    # Then place the order using the platform's own API
+    # See: https://trading-api.readme.io (Kalshi)
+    # See: https://docs.polymarket.com (Polymarket)
+    ```
+
+  </Step>
+
+  <Step title="Track performance">
+
+    Monitor your shadow portfolio to see how the strategy performs over time before committing real capital.
+
+    <CodeGroup>
+    ```python Python
+    # Portfolio summary
+    portfolio = client.get("/portfolio", params={"mode": "shadow"}).json()
+
+    print(f"Open positions:   {portfolio['open_count']}")
+    print(f"Closed positions: {portfolio['closed_count']}")
+    print(f"Win rate:         {portfolio['win_rate']:.0%}")
+    print(f"Total P&L:        ${portfolio['total_pnl']:+.2f}")
+    print(f"Bankroll:         ${portfolio['bankroll']:.2f}")
+
+    # List individual positions
+    print(f"\n{'Ticker':<25} {'Side':<5} {'Entry':<7} {'P&L':>8}")
+    print("-" * 50)
+    for pos in portfolio["positions"]:
+        print(f"{pos['ticker']:<25} {pos['side']:<5} {pos['entry_price']:<7.2f} ${pos['pnl']:>+7.2f}")
+    ```
+
+    ```bash cURL
+    # Portfolio summary
+    curl "https://api.rekko.ai/v1/portfolio?mode=shadow" \
+      -H "Authorization: Bearer $REKKO_API_KEY"
+
+    # Performance metrics over time
+    curl "https://api.rekko.ai/v1/performance?mode=shadow" \
+      -H "Authorization: Bearer $REKKO_API_KEY"
+    ```
+
+    ```javascript JavaScript
+    const portfolio = await fetch(`${BASE_URL}/portfolio?mode=shadow`, {
+      headers,
+    }).then((r) => r.json());
+
+    console.log(`Open: ${portfolio.open_count} | Closed: ${portfolio.closed_count}`);
+    console.log(`Win rate: ${(portfolio.win_rate * 100).toFixed(0)}%`);
+    console.log(`Total P&L: $${portfolio.total_pnl.toFixed(2)}`);
+    ```
+    </CodeGroup>
+
+    Use the performance endpoint for historical metrics:
+
+    ```python Python
+    perf = client.get("/performance", params={"mode": "shadow"}).json()
+
+    print(f"Sharpe ratio:     {perf['sharpe_ratio']:.2f}")
+    print(f"Max drawdown:     {perf['max_drawdown']:.1%}")
+    print(f"Avg edge:         {perf['avg_edge']:+.2f}")
+    print(f"Avg hold time:    {perf['avg_hold_hours']:.0f} hours")
+    print(f"Total trades:     {perf['total_trades']}")
+    ```
+
+  </Step>
+</Steps>
+
+## Complete script
+
+Here is the full bot as a single copy-paste-ready Python script. It screens markets, analyzes the top candidate, generates a signal, and places a shadow trade.
+
+```python Python
+#!/usr/bin/env python3
+"""
+Prediction market trading bot using the Rekko AI API.
+
+Screens markets for high-edge opportunities, runs AI analysis,
+generates Kelly-sized trading signals, and paper trades via shadow mode.
+
+Usage:
+    pip install httpx
+    export REKKO_API_KEY="your_key_here"
+    python trading_bot.py
+"""
+
+import os
+import sys
+import time
+
+import httpx
+
+API_KEY = os.environ.get("REKKO_API_KEY")
+if not API_KEY:
+    print("Set REKKO_API_KEY environment variable first.")
+    print("Sign up free at https://rekko.ai/dashboard")
+    sys.exit(1)
+
+BANKROLL = 10_000  # Starting bankroll in dollars
+MIN_SCORE = 50     # Minimum screening score to analyze
+MIN_EDGE = 0.05    # Minimum edge (5%) to trade
+PLATFORM = "kalshi" # "kalshi" or "polymarket"
+
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": f"Bearer {API_KEY}"},
+    timeout=120.0,
+)
+
+
+def screen_markets() -> list[dict]:
+    """Screen markets and return candidates sorted by score."""
+    results = client.post("/screen", json={
+        "platform": PLATFORM,
+        "min_volume_24h": 10000,
+        "min_score": MIN_SCORE,
+        "limit": 10,
+    }).json()
+    print(f"Screened {len(results)} markets above score {MIN_SCORE}")
+    return results
+
+
+def analyze_market(platform: str, market_id: str) -> dict:
+    """Trigger analysis, poll until complete, and return the result."""
+    resp = client.post(f"/markets/{platform}/{market_id}/analyze")
+    analysis_id = resp.json()["analysis_id"]
+    print(f"  Analysis started: {analysis_id}")
+
+    while True:
+        status = client.get(
+            f"/markets/{platform}/{market_id}/analyze/{analysis_id}/status"
+        ).json()
+        if status["status"] == "complete":
+            break
+        if status["status"] == "error":
+            raise Exception(status.get("error_message", "Analysis failed"))
+        time.sleep(5)
+
+    return client.get(f"/markets/{platform}/{market_id}/analysis").json()
+
+
+def get_signal(platform: str, market_id: str) -> dict:
+    """Generate a trading signal with Kelly position sizing."""
+    return client.post("/signals", params={"wait": "true"}, json={
+        "market": f"{platform}/{market_id}",
+        "risk_limit": "medium",
+    }).json()
+
+
+def place_shadow_trade(platform: str, market_id: str, side: str, size_usd: float) -> dict:
+    """Place a paper trade via shadow trading."""
+    return client.post("/trades/shadow", json={
+        "ticker": market_id,
+        "platform": platform,
+        "side": side,
+        "size_usd": round(size_usd, 2),
+    }).json()
+
+
+def show_portfolio():
+    """Print current shadow portfolio summary."""
+    portfolio = client.get("/portfolio", params={"mode": "shadow"}).json()
+    print(f"\n--- Portfolio ---")
+    print(f"Open: {portfolio['open_count']} | Closed: {portfolio['closed_count']}")
+    print(f"Win rate: {portfolio['win_rate']:.0%} | P&L: ${portfolio['total_pnl']:+.2f}")
+
+
+def main():
+    print(f"Screening {PLATFORM} markets...\n")
+    candidates = screen_markets()
+
+    if not candidates:
+        print("No markets above threshold. Try lowering MIN_SCORE.")
+        return
+
+    for candidate in candidates[:3]:  # Analyze top 3
+        market_id = candidate["market_id"]
+        platform = candidate["platform"]
+        print(f"\n{'='*60}")
+        print(f"Analyzing: {candidate['title'][:55]}")
+        print(f"Ticker: {market_id} | Score: {candidate['score']}")
+        print(f"{'='*60}")
+
+        analysis = analyze_market(platform, market_id)
+        print(f"  Probability: {analysis['probability']:.0%}")
+        print(f"  Edge: {analysis['edge']:+.2f}")
+        print(f"  Risk: {analysis['risk_rating']}")
+
+        if abs(analysis["edge"]) < MIN_EDGE:
+            print(f"  Edge below {MIN_EDGE:.0%} threshold — skipping.")
+            continue
+
+        signal = get_signal(platform, market_id)
+        print(f"  Signal: {signal['recommendation']}")
+        print(f"  Kelly size: {signal['size_pct']:.1%} (${signal['size_pct'] * BANKROLL:.0f})")
+
+        if signal["recommendation"] == "NO_TRADE":
+            print("  No trade recommended.")
+            continue
+
+        side = "yes" if "YES" in signal["recommendation"] else "no"
+        size_usd = signal["size_pct"] * BANKROLL
+        trade = place_shadow_trade(platform, market_id, side, size_usd)
+        print(f"  Shadow trade placed: {trade['trade_id']}")
+        print(f"  {side.upper()} @ ${size_usd:.2f}")
+
+    show_portfolio()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+## Going further
+
+### Schedule the bot on a cron
+
+Run the script every hour to continuously screen for new opportunities:
+
+```bash
+# crontab -e
+0 * * * * cd /path/to/bot && REKKO_API_KEY=your_key python trading_bot.py >> bot.log 2>&1
+```
+
+Or use webhooks for real-time triggers instead of polling. See [Webhooks and streaming](/guides/webhooks-streaming).
+
+### Portfolio-aware signals
+
+When you have multiple open positions, standard signals do not account for correlation. The portfolio signal endpoint considers your existing holdings and adjusts sizing to avoid concentration:
+
+```python Python
+signal = client.post("/signals/portfolio", params={"wait": "true"}, json={
+    "market": f"{platform}/{market_id}",
+    "risk_limit": "medium",
+    "positions": portfolio["positions"],  # Pass your current holdings
+    "bankroll": BANKROLL,
+}).json()
+
+print(f"Adjusted size: {signal['size_pct']:.1%}")  # May be smaller to reduce correlation
+if signal.get("concentration_warning"):
+    print(f"Warning: {signal['concentration_warning']}")
+```
+
+### Cross-platform arbitrage
+
+Find price discrepancies between Kalshi and Polymarket on the same event:
+
+```python Python
+arb = client.get("/arbitrage").json()
+
+for opp in arb:
+    print(f"{opp['title']}")
+    print(f"  Kalshi YES: {opp['kalshi_yes_price']:.2f}")
+    print(f"  Polymarket YES: {opp['polymarket_yes_price']:.2f}")
+    print(f"  Spread: {opp['spread']:+.2f}")
+```
+
+See [Cross-platform arbitrage guide](/guides/prediction-market-arbitrage) for a full walkthrough.
+
+### Use Rekko from your AI coding assistant
+
+Install the Rekko MCP server to query markets, run analyses, and generate signals directly from your editor:
+
+```bash
+# Claude Code
+claude mcp add rekko-mcp -- uvx rekko-mcp@latest
+
+# Cursor
+# Add to .cursor/mcp.json — see docs for config
+```
+
+Then ask your assistant: "Screen Kalshi for high-edge politics markets and analyze the top result." See [MCP integration](/integrations/mcp/overview).
+
+## How the pieces fit together
+
+| Step | Endpoint | Tier | Cost |
+|------|----------|------|------|
+| Screen markets | `POST /v1/screen` | INSIGHT | $0.10 |
+| Trigger analysis | `POST /v1/markets/{p}/{id}/analyze` | INSIGHT | $0.10 |
+| Poll status | `GET /v1/markets/{p}/{id}/analyze/{id}/status` | Free | $0.00 |
+| Retrieve analysis | `GET /v1/markets/{p}/{id}/analysis` | INSIGHT | $0.10 |
+| Generate signal | `POST /v1/signals` | STRATEGY | $2.00 |
+| Shadow trade | `POST /v1/trades/shadow` | Free | $0.00 |
+| Portfolio | `GET /v1/portfolio` | Free | $0.00 |
+| Performance | `GET /v1/performance` | Free | $0.00 |
+
+A single screen-analyze-signal-trade cycle costs approximately **$2.30** on the Pro plan ($0.10 screen + $0.10 trigger + $0.10 retrieve + $2.00 signal). Screening and analysis alone (without signal generation) costs **$0.30**.
+
+<Tip>
+  The Free plan includes 10 INSIGHT calls per month. For automated bots that run frequently, upgrade to [Pro](/pricing) for 500 INSIGHT calls and 50 STRATEGY calls.
+</Tip>
+
+## What's next
+
+<CardGroup cols={3}>
+  <Card title="Prediction market API comparison" icon="scale-balanced" href="/guides/prediction-market-api-comparison">
+    Compare Rekko with Kalshi, Polymarket, and other market data APIs.
+  </Card>
+  <Card title="Cross-platform arbitrage" icon="arrows-left-right" href="/guides/prediction-market-arbitrage">
+    Find and exploit price gaps between Kalshi and Polymarket.
+  </Card>
+  <Card title="Kelly criterion sizing" icon="calculator" href="/guides/kelly-criterion-position-sizing">
+    Deep dive on the math behind position sizing.
+  </Card>
+  <Card title="API reference" icon="code" href="/api-reference/introduction">
+    Full endpoint documentation with interactive playground.
+  </Card>
+  <Card title="MCP integration" icon="plug" href="/integrations/mcp/overview">
+    Use Rekko from your AI coding assistant.
+  </Card>
+</CardGroup>

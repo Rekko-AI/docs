@@ -1,0 +1,728 @@
+---
+title: "Kalshi API Guide"
+sidebarTitle: "Kalshi API"
+"og:title": "Kalshi API Developer Guide 2026 — Authentication, Endpoints, Python SDK, and Trading"
+description: "Complete guide to the Kalshi prediction market API. Authentication with RSA-PSS, REST endpoints, market data, order placement, Python examples, and how to add AI-powered analysis."
+icon: chart-line
+---
+
+```python TL;DR — fetch open markets from Kalshi
+import httpx
+
+resp = httpx.get(
+    "https://trading-api.kalshi.com/trade-api/v2/markets",
+    headers=kalshi_auth_headers("GET", "/trade-api/v2/markets"),
+    params={"limit": 10, "status": "open"},
+)
+markets = resp.json()["markets"]
+for m in markets:
+    print(f"{m['ticker']}  YES: {m['yes_bid']}  NO: {100 - m['yes_ask']}  Vol: {m['volume']}")
+```
+
+## What this page covers
+
+- What Kalshi is and how its markets work
+- Ticker format and how to read market identifiers
+- RSA-PSS authentication flow with working code
+- Core REST endpoints for market data, orders, and portfolio
+- Market response format and price interpretation
+- Rate limits and fee structure
+- Python SDK options and HTTP client patterns
+- What Kalshi's API does not provide out of the box
+- How to layer AI analysis and trading signals on top of raw Kalshi data
+
+---
+
+## Overview
+
+Kalshi is the first CFTC-regulated prediction market exchange in the United States. It launched in 2021 and offers binary event contracts that settle to $1 (yes) or $0 (no). Traders buy and sell contracts representing the probability of real-world events.
+
+Markets cover a wide range of categories:
+
+| Category | Example markets |
+|----------|----------------|
+| Economics | Fed rate decisions, CPI prints, GDP growth, jobless claims |
+| Politics | Election outcomes, congressional votes, government shutdowns |
+| Crypto | Bitcoin and Ethereum price milestones |
+| Weather | Temperature records, hurricane landfalls |
+| Entertainment | Award shows, box office results, streaming top 10 |
+| Sports | NFL, NBA, UFC outcomes |
+
+All API documentation lives at [trading-api.kalshi.com](https://trading-api.kalshi.com). The base URL for all API requests is:
+
+```
+https://trading-api.kalshi.com/trade-api/v2
+```
+
+Prices on Kalshi are expressed in **cents** (integers from 1 to 99), representing the implied probability. A YES price of 62 means the market prices the event at roughly 62% likely.
+
+---
+
+## Ticker format
+
+Every Kalshi market has a ticker that encodes the series and expiration:
+
+```
+KXFED-26MAR19
+^     ^
+|     └── Expiration: March 19, 2026
+└── Series prefix: KXFED = Federal Reserve rate decisions
+```
+
+Common series prefixes:
+
+| Prefix | Category |
+|--------|----------|
+| `KXFED` | Federal Reserve rate decisions |
+| `KXBTC` | Bitcoin price milestones |
+| `KXETH` | Ethereum price milestones |
+| `KXINFLATION` | CPI / inflation |
+| `KXGDP` | GDP growth |
+| `KXJOBLESS` | Weekly jobless claims |
+| `KXNFLMVP` | NFL MVP |
+| `KXUFC` | UFC fight outcomes |
+| `KXNETFLIX` | Netflix Top 10 |
+| `KXOSCAR` | Academy Awards |
+
+A ticker like `KXBTC-26MAR14-100000` means: Bitcoin price series, expiring March 14, 2026, with a strike of $100,000.
+
+You can list all active series by querying the events endpoint:
+
+```
+GET /trade-api/v2/events
+```
+
+---
+
+## Authentication
+
+Kalshi uses RSA-PSS signed request headers. There is no simple API key header; every request must be cryptographically signed.
+
+### Step 1: Generate an RSA key pair
+
+```bash
+openssl genrsa -out kalshi_private_key.pem 4096
+openssl rsa -in kalshi_private_key.pem -pubout -out kalshi_public_key.pem
+```
+
+### Step 2: Upload your public key
+
+Log in to your Kalshi account at [kalshi.com](https://kalshi.com), go to **Settings** > **API Keys**, and upload the contents of `kalshi_public_key.pem`. Kalshi gives you back an **API Key ID** (a UUID).
+
+### Step 3: Sign each request
+
+Every API request includes three headers:
+
+| Header | Value |
+|--------|-------|
+| `KALSHI-ACCESS-KEY` | Your API Key ID (UUID from step 2) |
+| `KALSHI-ACCESS-TIMESTAMP` | Current time in milliseconds since epoch |
+| `KALSHI-ACCESS-SIGNATURE` | RSA-PSS signature of `timestamp + method + path` |
+
+The signing message is the concatenation of `timestamp` (as string), the HTTP method (`GET`, `POST`, etc.), and the request path (including query string for GET requests).
+
+<CodeGroup>
+```python Python
+import time
+import base64
+import httpx
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+
+# Load your private key once at startup
+with open("kalshi_private_key.pem", "rb") as f:
+    private_key = serialization.load_pem_private_key(f.read(), password=None)
+
+API_KEY_ID = "YOUR_KALSHI_API_KEY_ID"
+BASE_URL = "https://trading-api.kalshi.com"
+
+
+def kalshi_auth_headers(method: str, path: str) -> dict:
+    """Build signed headers for a Kalshi API request."""
+    timestamp = str(int(time.time() * 1000))
+    message = f"{timestamp}{method}{path}".encode()
+
+    signature = private_key.sign(
+        message,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH,
+        ),
+        hashes.SHA256(),
+    )
+
+    return {
+        "KALSHI-ACCESS-KEY": API_KEY_ID,
+        "KALSHI-ACCESS-TIMESTAMP": timestamp,
+        "KALSHI-ACCESS-SIGNATURE": base64.b64encode(signature).decode(),
+        "Content-Type": "application/json",
+    }
+
+
+# Example: list open markets
+path = "/trade-api/v2/markets"
+resp = httpx.get(
+    f"{BASE_URL}{path}",
+    headers=kalshi_auth_headers("GET", path),
+    params={"limit": 10, "status": "open"},
+)
+print(resp.json())
+```
+
+```javascript JavaScript
+const crypto = require("crypto");
+const fs = require("fs");
+
+const privateKey = fs.readFileSync("kalshi_private_key.pem", "utf8");
+const API_KEY_ID = "YOUR_KALSHI_API_KEY_ID";
+const BASE_URL = "https://trading-api.kalshi.com";
+
+function kalshiAuthHeaders(method, path) {
+  const timestamp = Date.now().toString();
+  const message = `${timestamp}${method}${path}`;
+
+  const signature = crypto.sign("sha256", Buffer.from(message), {
+    key: privateKey,
+    padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+    saltLength: crypto.constants.RSA_PSS_SALTLEN_MAX_HASH,
+  });
+
+  return {
+    "KALSHI-ACCESS-KEY": API_KEY_ID,
+    "KALSHI-ACCESS-TIMESTAMP": timestamp,
+    "KALSHI-ACCESS-SIGNATURE": signature.toString("base64"),
+    "Content-Type": "application/json",
+  };
+}
+
+// Example: list open markets
+const path = "/trade-api/v2/markets";
+const resp = await fetch(`${BASE_URL}${path}?limit=10&status=open`, {
+  headers: kalshiAuthHeaders("GET", path),
+});
+const data = await resp.json();
+console.log(data);
+```
+
+```bash cURL
+# RSA-PSS signing is not practical in pure bash.
+# Generate the signature in Python/Node, then pass it:
+curl "https://trading-api.kalshi.com/trade-api/v2/markets?limit=10&status=open" \
+  -H "KALSHI-ACCESS-KEY: YOUR_KALSHI_API_KEY_ID" \
+  -H "KALSHI-ACCESS-TIMESTAMP: ${TIMESTAMP}" \
+  -H "KALSHI-ACCESS-SIGNATURE: ${SIGNATURE}"
+```
+</CodeGroup>
+
+<Note>
+  The signing path must match exactly what you send to the server. For GET requests with query parameters, sign the path **without** the query string. The `params` are passed separately.
+</Note>
+
+---
+
+## Core API endpoints
+
+### List markets
+
+Retrieve a paginated list of markets, filtered by status, series, or cursor.
+
+```
+GET /trade-api/v2/markets
+```
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | integer | Results per page (max 200) |
+| `cursor` | string | Pagination cursor from previous response |
+| `status` | string | `open`, `closed`, `determined` |
+| `series_ticker` | string | Filter by series (e.g., `KXFED`) |
+| `event_ticker` | string | Filter by parent event |
+
+<CodeGroup>
+```python Python
+path = "/trade-api/v2/markets"
+resp = httpx.get(
+    f"{BASE_URL}{path}",
+    headers=kalshi_auth_headers("GET", path),
+    params={"limit": 20, "status": "open"},
+)
+data = resp.json()
+for market in data["markets"]:
+    print(f"{market['ticker']}  {market['title']}  YES: {market['yes_bid']}")
+# Paginate: pass data["cursor"] in the next request
+```
+
+```javascript JavaScript
+const path = "/trade-api/v2/markets";
+const resp = await fetch(`${BASE_URL}${path}?limit=20&status=open`, {
+  headers: kalshiAuthHeaders("GET", path),
+});
+const data = await resp.json();
+data.markets.forEach((m) => console.log(`${m.ticker}  YES: ${m.yes_bid}`));
+```
+
+```bash cURL
+curl "https://trading-api.kalshi.com/trade-api/v2/markets?limit=20&status=open" \
+  -H "KALSHI-ACCESS-KEY: YOUR_KALSHI_API_KEY_ID" \
+  -H "KALSHI-ACCESS-TIMESTAMP: ${TIMESTAMP}" \
+  -H "KALSHI-ACCESS-SIGNATURE: ${SIGNATURE}"
+```
+</CodeGroup>
+
+### Get a single market
+
+```
+GET /trade-api/v2/markets/{ticker}
+```
+
+```python
+ticker = "KXFED-26MAR19"
+path = f"/trade-api/v2/markets/{ticker}"
+resp = httpx.get(f"{BASE_URL}{path}", headers=kalshi_auth_headers("GET", path))
+market = resp.json()["market"]
+print(f"Title: {market['title']}")
+print(f"YES bid/ask: {market['yes_bid']}/{market['yes_ask']}")
+print(f"Volume: {market['volume']}")
+```
+
+### Get the order book
+
+```
+GET /trade-api/v2/markets/{ticker}/orderbook
+```
+
+Returns the full order book with bids and asks at each price level. Useful for assessing liquidity before placing larger orders.
+
+```python
+ticker = "KXFED-26MAR19"
+path = f"/trade-api/v2/markets/{ticker}/orderbook"
+resp = httpx.get(f"{BASE_URL}{path}", headers=kalshi_auth_headers("GET", path))
+book = resp.json()["orderbook"]
+print(f"Best YES bid: {book['yes'][-1][0]} ({book['yes'][-1][1]} contracts)")
+print(f"Best NO bid: {book['no'][-1][0]} ({book['no'][-1][1]} contracts)")
+```
+
+### Place an order
+
+```
+POST /trade-api/v2/portfolio/orders
+```
+
+<CodeGroup>
+```python Python
+path = "/trade-api/v2/portfolio/orders"
+order = {
+    "ticker": "KXFED-26MAR19",
+    "action": "buy",
+    "side": "yes",
+    "type": "limit",
+    "count": 10,       # Number of contracts
+    "yes_price": 62,   # Limit price in cents
+}
+resp = httpx.post(
+    f"{BASE_URL}{path}",
+    headers=kalshi_auth_headers("POST", path),
+    json=order,
+)
+result = resp.json()["order"]
+print(f"Order ID: {result['order_id']}")
+print(f"Status: {result['status']}")
+```
+
+```javascript JavaScript
+const path = "/trade-api/v2/portfolio/orders";
+const order = {
+  ticker: "KXFED-26MAR19",
+  action: "buy",
+  side: "yes",
+  type: "limit",
+  count: 10,
+  yes_price: 62,
+};
+const resp = await fetch(`${BASE_URL}${path}`, {
+  method: "POST",
+  headers: kalshiAuthHeaders("POST", path),
+  body: JSON.stringify(order),
+});
+const { order: result } = await resp.json();
+console.log(`Order ID: ${result.order_id}`);
+console.log(`Status: ${result.status}`);
+```
+
+```bash cURL
+curl -X POST "https://trading-api.kalshi.com/trade-api/v2/portfolio/orders" \
+  -H "KALSHI-ACCESS-KEY: YOUR_KALSHI_API_KEY_ID" \
+  -H "KALSHI-ACCESS-TIMESTAMP: ${TIMESTAMP}" \
+  -H "KALSHI-ACCESS-SIGNATURE: ${SIGNATURE}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticker": "KXFED-26MAR19",
+    "action": "buy",
+    "side": "yes",
+    "type": "limit",
+    "count": 10,
+    "yes_price": 62
+  }'
+```
+</CodeGroup>
+
+**Order parameters:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ticker` | string | Yes | Market ticker |
+| `action` | string | Yes | `buy` or `sell` |
+| `side` | string | Yes | `yes` or `no` |
+| `type` | string | Yes | `limit` or `market` |
+| `count` | integer | Yes | Number of contracts |
+| `yes_price` | integer | For limit | Limit price in cents (1-99) |
+
+<Warning>
+  Kalshi requires a funded account to place orders. Deposits are made via ACH bank transfer or wire from the Kalshi web app.
+</Warning>
+
+### Other portfolio endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/trade-api/v2/portfolio/positions` | GET | All open positions (ticker, yes/no counts, average price) |
+| `/trade-api/v2/portfolio/balance` | GET | Account balance in cents (`available_balance`, `total_deposited`) |
+| `/trade-api/v2/portfolio/orders` | GET | Order history with status and fill details |
+| `/trade-api/v2/portfolio/settlements` | GET | Settlement history for resolved markets |
+
+All portfolio endpoints use the same RSA-PSS authentication headers.
+
+---
+
+## Market data format
+
+A market object from the Kalshi API looks like this:
+
+```json
+{
+  "ticker": "KXFED-26MAR19",
+  "event_ticker": "KXFED-26MAR19",
+  "title": "Will the Fed cut rates at the March 2026 meeting?",
+  "subtitle": "Federal Reserve",
+  "yes_bid": 61,
+  "yes_ask": 63,
+  "no_bid": 37,
+  "no_ask": 39,
+  "last_price": 62,
+  "volume": 48250,
+  "volume_24h": 12840,
+  "open_interest": 34000,
+  "status": "open",
+  "result": "",
+  "expiration_time": "2026-03-19T18:00:00Z",
+  "close_time": "2026-03-19T18:00:00Z"
+}
+```
+
+**Key fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ticker` | string | Unique market identifier (e.g., `KXFED-26MAR19`) |
+| `title` | string | Human-readable question the market resolves on |
+| `yes_bid` | integer | Best bid for YES contracts, in cents |
+| `yes_ask` | integer | Best ask for YES contracts, in cents |
+| `no_bid` | integer | Best bid for NO contracts, in cents |
+| `no_ask` | integer | Best ask for NO contracts, in cents |
+| `last_price` | integer | Last traded price, in cents |
+| `volume` | integer | Total contracts traded (lifetime) |
+| `volume_24h` | integer | Contracts traded in the last 24 hours |
+| `open_interest` | integer | Total open (unsettled) contracts |
+| `status` | string | `open`, `closed`, or `determined` |
+| `result` | string | Empty while open; `yes` or `no` after determination |
+| `expiration_time` | string | ISO 8601 timestamp when the market resolves |
+
+### Price interpretation
+
+All prices are integers from 1 to 99 representing cents:
+
+- A YES bid of `61` means someone is willing to pay $0.61 per contract
+- A YES ask of `63` means someone is selling at $0.63 per contract
+- The spread is `63 - 61 = 2 cents`
+- YES + NO prices always sum to approximately 100 (minus the spread)
+- Contracts settle at $1.00 (YES wins) or $0.00 (NO wins)
+
+---
+
+## Rate limits and fees
+
+### Rate limits
+
+Kalshi enforces approximately **10 requests per second** per API key. The limits are not published precisely, but exceeding them returns a `429` status code. Back off with exponential retry when you see it.
+
+### Fee structure
+
+| Order type | Fee |
+|-----------|-----|
+| Maker (adds liquidity to the order book) | **Free** |
+| Taker (crosses the spread) | `0.07 * price * (1 - price)` per contract |
+
+The taker fee is maximized at the midpoint: `0.07 * 0.50 * 0.50 = $0.0175` per contract. It decreases as prices approach 0 or 100.
+
+**Example fees:**
+
+| YES price | Taker fee per contract |
+|-----------|----------------------|
+| 10 cents | $0.0063 |
+| 25 cents | $0.0131 |
+| 50 cents | $0.0175 |
+| 75 cents | $0.0131 |
+| 90 cents | $0.0063 |
+
+<Tip>
+  Maker orders (limit orders that don't immediately fill) are free. If you can wait for your price, you pay zero fees. This is a significant advantage for algorithmic traders.
+</Tip>
+
+Deposits are made via ACH (free, 3-5 days) or wire ($25, same-day). Minimum deposit is $1. Withdrawals via ACH are free.
+
+---
+
+## Python SDK options
+
+There is no official first-party Python SDK from Kalshi. Here are your options:
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **`httpx` + custom auth** | Full control, async support, no extra dependencies | You manage auth signing yourself |
+| **`requests` + custom auth** | Familiar API, synchronous | No async, slightly more verbose |
+| **`kalshi-python`** (community) | Pre-built auth, basic REST wrapper | Not always up-to-date, limited features |
+
+Most production systems use `httpx` with a reusable auth helper. Wrap the `kalshi_auth_headers()` function from the [authentication section](#authentication) into a client class that handles signing automatically:
+
+```python
+class KalshiClient:
+    BASE_URL = "https://trading-api.kalshi.com"
+
+    def __init__(self, api_key_id: str, private_key_path: str):
+        self.api_key_id = api_key_id
+        with open(private_key_path, "rb") as f:
+            self.private_key = serialization.load_pem_private_key(f.read(), password=None)
+        self.http = httpx.Client(base_url=self.BASE_URL, timeout=30)
+
+    def _sign(self, method: str, path: str) -> dict:
+        timestamp = str(int(time.time() * 1000))
+        message = f"{timestamp}{method}{path}".encode()
+        signature = self.private_key.sign(
+            message,
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+            hashes.SHA256(),
+        )
+        return {
+            "KALSHI-ACCESS-KEY": self.api_key_id,
+            "KALSHI-ACCESS-TIMESTAMP": timestamp,
+            "KALSHI-ACCESS-SIGNATURE": base64.b64encode(signature).decode(),
+        }
+
+    def get_market(self, ticker: str) -> dict:
+        path = f"/trade-api/v2/markets/{ticker}"
+        return self.http.get(path, headers=self._sign("GET", path)).json()["market"]
+
+    def list_markets(self, status: str = "open", limit: int = 20) -> list:
+        path = "/trade-api/v2/markets"
+        return self.http.get(path, headers=self._sign("GET", path),
+                             params={"status": status, "limit": limit}).json()["markets"]
+
+    def place_order(self, ticker: str, side: str, count: int, price: int) -> dict:
+        path = "/trade-api/v2/portfolio/orders"
+        body = {"ticker": ticker, "action": "buy", "side": side,
+                "type": "limit", "count": count, "yes_price": price}
+        return self.http.post(path, headers=self._sign("POST", path), json=body).json()["order"]
+
+# Usage
+client = KalshiClient("YOUR_KALSHI_API_KEY_ID", "kalshi_private_key.pem")
+for m in client.list_markets(limit=5):
+    print(f"{m['ticker']}  {m['title']}  YES: {m['yes_bid']}")
+```
+
+---
+
+## What Kalshi's API does not provide
+
+Kalshi gives you raw market data and order execution. It does not include:
+
+- **Independent probability estimates.** You get the market price, which reflects the crowd's view. There is no built-in second opinion.
+- **Cross-platform data.** You cannot compare Kalshi prices with Polymarket or Robinhood prices through the Kalshi API.
+- **Trading signals or recommendations.** The API tells you what the market thinks, not whether you should trade.
+- **Position sizing.** No guidance on how much to allocate to a given position based on edge and bankroll.
+- **Arbitrage detection.** No way to find price divergences between platforms.
+- **Causal analysis.** No breakdown of which real-world factors are driving a market's price.
+- **Historical trend intelligence.** Order book snapshots and trade history are available, but there is no analyzed trend data or price movement context.
+
+These gaps are where an intelligence layer adds the most value.
+
+---
+
+## Adding AI analysis to Kalshi data
+
+Raw Kalshi data tells you *what the market thinks*. An intelligence layer tells you *what the market might be missing*.
+
+Here is a complete workflow: pull a market from Kalshi via Rekko's normalized API, run an AI analysis, and get a trading signal with position sizing.
+
+### Step 1: Look up the market
+
+Rekko normalizes Kalshi data into a consistent format alongside Polymarket and Robinhood. Prices are returned as decimals (0.0 to 1.0) instead of raw cents.
+
+<CodeGroup>
+```python Python
+import httpx
+
+rekko = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+
+# Fetch normalized market data
+market = rekko.get("/markets/kalshi/KXFED-26MAR19").json()
+print(f"Market: {market['title']}")
+print(f"YES price: {market['yes_price']}")
+print(f"Volume (24h): ${market['volume_24h']:,.0f}")
+```
+
+```javascript JavaScript
+const rekko = {
+  base: "https://api.rekko.ai/v1",
+  headers: { Authorization: "Bearer YOUR_API_KEY" },
+};
+
+const resp = await fetch(
+  `${rekko.base}/markets/kalshi/KXFED-26MAR19`,
+  { headers: rekko.headers }
+);
+const market = await resp.json();
+console.log(`Market: ${market.title}`);
+console.log(`YES price: ${market.yes_price}`);
+```
+
+```bash cURL
+curl https://api.rekko.ai/v1/markets/kalshi/KXFED-26MAR19 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+### Step 2: Run an AI analysis
+
+The analysis pipeline researches the market question, synthesizes findings from multiple sources, and produces an independent probability estimate. It runs for 30-90 seconds.
+
+```python
+import time
+
+# Trigger the analysis
+resp = rekko.post("/markets/kalshi/KXFED-26MAR19/analyze")
+analysis_id = resp.json()["analysis_id"]
+
+# Poll for completion
+while True:
+    status = rekko.get(
+        f"/markets/kalshi/KXFED-26MAR19/analyze/{analysis_id}/status"
+    ).json()
+    if status["status"] == "complete":
+        break
+    time.sleep(5)
+
+# Get the completed analysis
+analysis = rekko.get("/markets/kalshi/KXFED-26MAR19/analysis").json()
+print(f"AI probability estimate: {analysis['probability']:.0%}")
+print(f"Market price: {market['yes_price']:.0%}")
+print(f"Edge: {analysis['edge']:+.0%}")
+print(f"Recommendation: {analysis['recommendation']}")
+```
+
+See the [quickstart](/quickstart) for the full trigger-poll-get pattern in all three languages.
+
+### Step 3: Get a trading signal with position sizing
+
+A signal combines the analysis with Kelly criterion sizing to tell you how much to allocate.
+
+<CodeGroup>
+```python Python
+signal = rekko.post(
+    "/signals",
+    params={"wait": "true"},
+    json={"platform": "kalshi", "market_id": "KXFED-26MAR19"},
+).json()
+print(f"Recommendation: {signal['recommendation']}")
+print(f"Edge: {signal['edge']:+.1%}")
+print(f"Kelly fraction: {signal['size_pct']:.1%} of bankroll")
+print(f"Risk rating: {signal['risk_rating']}")
+```
+
+```javascript JavaScript
+const signal = await fetch(`${rekko.base}/signals?wait=true`, {
+  method: "POST",
+  headers: { ...rekko.headers, "Content-Type": "application/json" },
+  body: JSON.stringify({ platform: "kalshi", market_id: "KXFED-26MAR19" }),
+}).then((r) => r.json());
+console.log(`Recommendation: ${signal.recommendation}`);
+console.log(`Edge: ${(signal.edge * 100).toFixed(1)}%`);
+```
+
+```bash cURL
+curl -X POST "https://api.rekko.ai/v1/signals?wait=true" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"platform": "kalshi", "market_id": "KXFED-26MAR19"}'
+```
+</CodeGroup>
+
+### Full comparison: raw Kalshi data vs. Rekko intelligence
+
+| Capability | Kalshi API | Kalshi + Rekko |
+|------------|-----------|----------------|
+| Real-time market prices | Yes | Yes (normalized) |
+| Order book depth | Yes | Yes |
+| Order placement and execution | Yes | Via Kalshi directly |
+| Independent probability estimate | No | Yes |
+| Edge detection | No | Yes |
+| Kelly-criterion position sizing | No | Yes |
+| Cross-platform price comparison | No | Yes (Kalshi + Polymarket + Robinhood) |
+| Arbitrage detection | No | Yes |
+| Causal factor decomposition | No | Yes |
+| Resolution timing intelligence | No | Yes |
+| Market screening and filtering | Basic (by status) | Advanced (by edge, volume, category, freshness) |
+
+---
+
+## Error handling
+
+Kalshi returns standard HTTP status codes:
+
+| Status | Meaning |
+|--------|---------|
+| `200` | Success |
+| `400` | Invalid request (bad parameters) |
+| `401` | Authentication failed (bad signature or expired timestamp) |
+| `403` | Insufficient permissions |
+| `404` | Market or resource not found |
+| `429` | Rate limit exceeded |
+| `500` | Server error |
+
+Implement exponential backoff for `429` and `5xx` responses. Most HTTP libraries (including `httpx` with `httpx.HTTPTransport(retries=3)`) can handle this automatically.
+
+---
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Polymarket API guide" icon="coins" href="/guides/polymarket-api-guide">
+    The same walkthrough for Polymarket's crypto-native API.
+  </Card>
+  <Card title="Build a trading bot" icon="robot" href="/guides/build-trading-bot-python">
+    End-to-end Python bot using Kalshi data with AI-powered signals.
+  </Card>
+  <Card title="API comparison" icon="table" href="/guides/prediction-market-api-comparison">
+    Side-by-side comparison of Kalshi, Polymarket, and Robinhood APIs.
+  </Card>
+  <Card title="Cross-platform arbitrage" icon="arrows-left-right" href="/guides/prediction-market-arbitrage">
+    Find price divergences across platforms and size trades with edge.
+  </Card>
+  <Card title="Rekko API reference" icon="code" href="/api-reference/introduction">
+    Full endpoint documentation with interactive playground.
+  </Card>
+</CardGroup>

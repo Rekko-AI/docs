@@ -1,4 +1,82 @@
 ---
 title: Get My Profile
-openapi: GET /v1/customers/me
 ---
+
+Returns the authenticated customer's profile, current plan, monthly usage, and quota limits.
+
+## Request
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with your API key (e.g. `Bearer rk_free_abc123...`)
+</ParamField>
+
+```bash
+curl -X GET "https://api.rekko.ai/v1/customers/me" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Response
+
+<ResponseField name="customer_id" type="string">
+  Your Stripe customer ID.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Email associated with your account.
+</ResponseField>
+
+<ResponseField name="plan" type="string">
+  Current plan: `free` or `pro`.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Account status: `active`, `past_due`, or `canceled`.
+</ResponseField>
+
+<ResponseField name="key_prefix" type="string">
+  Display-safe prefix of your API key (e.g. `rk_free_...`).
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  Monthly usage counts by tier.
+
+  <Expandable title="usage fields">
+    <ResponseField name="listing" type="integer">Listing-tier calls this month.</ResponseField>
+    <ResponseField name="insight" type="integer">Insight-tier calls this month.</ResponseField>
+    <ResponseField name="strategy" type="integer">Strategy-tier calls this month.</ResponseField>
+    <ResponseField name="deep" type="integer">Deep-tier calls this month.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="quotas" type="object">
+  Monthly quota limits for your plan.
+</ResponseField>
+
+<ResponseField name="resets_on" type="string">
+  ISO date when usage counters reset (first of next month).
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "customer_id": "cus_abc123",
+  "email": "trader@example.com",
+  "plan": "free",
+  "status": "active",
+  "key_prefix": "rk_free_...",
+  "usage": {
+    "listing": 42,
+    "insight": 3,
+    "strategy": 0,
+    "deep": 0
+  },
+  "quotas": {
+    "listing": 100,
+    "insight": 10,
+    "strategy": 0,
+    "deep": 0
+  },
+  "resets_on": "2026-04-01"
+}
+```
+</ResponseExample>

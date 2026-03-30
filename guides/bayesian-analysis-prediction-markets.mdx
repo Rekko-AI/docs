@@ -1,0 +1,314 @@
+---
+title: "Bayesian Analysis for Prediction Markets"
+sidebarTitle: "Bayesian Analysis"
+"og:title": "Bayesian Analysis for Prediction Markets — Causal Decomposition and Probability Estimation"
+description: "How to apply Bayesian reasoning to prediction markets. Prior estimation, evidence updating, causal factor decomposition, and automated Bayesian analysis via API."
+icon: brain
+---
+
+```python
+import httpx
+
+client = httpx.Client(base_url="https://api.rekko.ai/v1", headers={"Authorization": "Bearer YOUR_API_KEY"})
+analysis = client.get("/markets/kalshi/KXFED-26MAR19/analysis", params={"expand": "causal"}).json()
+for factor in analysis["causal"]["factors"]:
+    print(f"  {factor['claim']}: {factor['prior']:.0%} → {factor['posterior']:.0%} (weight: {factor['weight']:.0%})")
+```
+
+## What this page covers
+
+- Why Bayesian reasoning is well-suited to prediction markets
+- Prior estimation from base rates
+- Evidence gathering and likelihood updates
+- Causal factor decomposition
+- Automated Bayesian analysis via the Rekko API
+- Interpreting causal decomposition results
+
+---
+
+## Why Bayesian reasoning for prediction markets?
+
+Prediction markets price events as probabilities. The market price reflects the crowd's aggregated estimate, but that estimate can be wrong — especially when:
+
+- New information has not been fully incorporated
+- The market is illiquid and slow to react
+- Participants have systematic biases (favorite-longshot bias, recency bias)
+
+Bayesian reasoning provides a structured framework to form your own probability estimate by starting with a prior (base rate), updating with evidence, and arriving at a posterior probability you can compare against the market price.
+
+## The Bayesian framework
+
+### Step 1: Establish a prior
+
+The prior is your starting estimate before looking at specific evidence. Good priors come from base rates:
+
+| Market question | Base rate source | Prior |
+|----------------|-----------------|-------|
+| Will the Fed cut rates? | Historical FOMC decisions | 30% of meetings result in cuts |
+| Will Bitcoin hit $150K? | Historical yearly BTC returns | Top-quartile years see 3x+ gains |
+| Will inflation exceed 3%? | Historical CPI distribution | ~15% of months since 2000 |
+
+```python
+# Example: Fed rate decision
+# Base rate: ~30% of FOMC meetings result in rate changes
+prior = 0.30
+```
+
+### Step 2: Gather evidence and update
+
+For each piece of evidence, estimate how likely you would see that evidence if the event happens (likelihood) vs if it does not:
+
+```
+posterior = (prior × likelihood_yes) / (prior × likelihood_yes + (1-prior) × likelihood_no)
+```
+
+This is Bayes' theorem applied to binary outcomes.
+
+```python
+def bayesian_update(prior: float, likelihood_yes: float, likelihood_no: float) -> float:
+    """Update a prior probability with new evidence."""
+    numerator = prior * likelihood_yes
+    denominator = numerator + (1 - prior) * likelihood_no
+    return numerator / denominator
+
+# Start with base rate
+prob = 0.30
+
+# Evidence 1: PCE inflation at 2.1% (within Fed target)
+# If they will cut: 80% chance we'd see this data
+# If they won't cut: 40% chance we'd see this data
+prob = bayesian_update(prob, 0.80, 0.40)
+print(f"After PCE data: {prob:.0%}")  # ~46%
+
+# Evidence 2: Three FOMC members signal openness to cuts
+# If they will cut: 90% chance of these signals
+# If they won't cut: 20% chance
+prob = bayesian_update(prob, 0.90, 0.20)
+print(f"After FOMC signals: {prob:.0%}")  # ~79%
+
+# Evidence 3: Strong employment report
+# If they will cut: 30% chance of strong jobs (less likely)
+# If they won't cut: 70% chance of strong jobs
+prob = bayesian_update(prob, 0.30, 0.70)
+print(f"After jobs report: {prob:.0%}")  # ~62%
+```
+
+### Step 3: Compare with market price
+
+Your posterior probability is your edge estimate:
+
+```python
+market_price = 0.55  # Market says 55%
+my_estimate = 0.62   # Your Bayesian posterior
+
+edge = my_estimate - market_price  # +7 points
+if edge > 0.05:  # Only trade with >5% edge
+    print(f"BUY YES — edge: {edge:.0%}")
+```
+
+## Causal factor decomposition
+
+Instead of serial Bayesian updates, you can decompose the probability into weighted causal factors — independent claims that each push the probability in a direction.
+
+This approach:
+- Makes the analysis transparent and auditable
+- Identifies which factors matter most
+- Allows quick re-estimation when a single factor changes
+
+### Structure
+
+Each causal factor has:
+- **Claim**: What the factor asserts
+- **Direction**: Does it support YES or NO?
+- **Weight**: How important is this factor relative to others (weights sum to ~1.0)
+- **Confidence**: How certain are you about this factor's assessment?
+- **Prior**: Base probability before this factor's evidence
+- **Posterior**: Updated probability after considering the evidence
+- **Evidence**: Specific data points supporting the assessment
+
+### Manual example
+
+```python
+factors = [
+    {
+        "claim": "Inflation is within Fed's comfort zone",
+        "direction": "supports_yes",
+        "weight": 0.35,
+        "confidence": 0.9,
+        "prior": 0.50,
+        "posterior": 0.78,
+        "evidence": ["PCE Feb 2026: 2.1%", "Core CPI declining 3 months"],
+    },
+    {
+        "claim": "Fed rhetoric is dovish",
+        "direction": "supports_yes",
+        "weight": 0.30,
+        "confidence": 0.75,
+        "prior": 0.50,
+        "posterior": 0.68,
+        "evidence": ["Waller speech March 12", "Bostic: 'open to adjustment'"],
+    },
+    {
+        "claim": "Tariff uncertainty creates headwinds",
+        "direction": "supports_no",
+        "weight": 0.20,
+        "confidence": 0.60,
+        "prior": 0.50,
+        "posterior": 0.42,
+        "evidence": ["New tariffs announced March 5", "Trade deficit widening"],
+    },
+    {
+        "claim": "Employment remains strong",
+        "direction": "supports_no",
+        "weight": 0.15,
+        "confidence": 0.70,
+        "prior": 0.50,
+        "posterior": 0.38,
+        "evidence": ["March NFP: +280K", "Unemployment: 3.8%"],
+    },
+]
+
+# Weighted aggregation
+overall = sum(f["weight"] * f["posterior"] for f in factors)
+print(f"Overall probability: {overall:.0%}")  # ~63%
+```
+
+## Automated causal decomposition with Rekko
+
+The Rekko analysis API performs this decomposition automatically. Use `?expand=causal` to get the full factor breakdown:
+
+<CodeGroup>
+```python Python
+import httpx
+
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+    timeout=120.0,
+)
+
+# Get analysis with causal decomposition
+analysis = client.get(
+    "/markets/kalshi/KXFED-26MAR19/analysis",
+    params={"expand": "causal"},
+).json()
+
+print(f"Overall probability: {analysis['probability']:.0%}")
+print(f"Confidence: {analysis['confidence']:.0%}")
+print(f"Edge vs market: {analysis['edge']:.1%}")
+print()
+
+causal = analysis["causal"]
+print(f"Method: {causal['method']}")
+print(f"Factors ({len(causal['factors'])}):")
+for f in causal["factors"]:
+    arrow = "↑" if f["direction"] == "supports_yes" else "↓"
+    print(f"  {arrow} {f['claim']} (weight: {f['weight']:.0%}, conf: {f['confidence']:.0%})")
+    print(f"    Prior: {f['prior']:.0%} → Posterior: {f['posterior']:.0%}")
+    for e in f["evidence"]:
+        print(f"    • {e}")
+```
+
+```bash cURL
+curl "https://api.rekko.ai/v1/markets/kalshi/KXFED-26MAR19/analysis?expand=causal" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const resp = await fetch(
+  "https://api.rekko.ai/v1/markets/kalshi/KXFED-26MAR19/analysis?expand=causal",
+  { headers: { Authorization: "Bearer YOUR_API_KEY" } }
+);
+const analysis = await resp.json();
+console.log(`Probability: ${analysis.probability}`);
+analysis.causal.factors.forEach((f) => {
+  console.log(`  ${f.direction === "supports_yes" ? "↑" : "↓"} ${f.claim} (${f.weight})`);
+});
+```
+</CodeGroup>
+
+### Example response
+
+```json
+{
+  "overall_probability": 0.71,
+  "overall_confidence": 0.82,
+  "method": "weighted_bayesian",
+  "factors": [
+    {
+      "claim": "Inflation is within Fed's comfort zone",
+      "direction": "supports_yes",
+      "weight": 0.35,
+      "confidence": 0.9,
+      "prior": 0.6,
+      "posterior": 0.82,
+      "evidence": ["PCE Feb 2026: 2.1%", "Core CPI declining 3 months"]
+    },
+    {
+      "claim": "Fed rhetoric is dovish",
+      "direction": "supports_yes",
+      "weight": 0.3,
+      "confidence": 0.75,
+      "prior": 0.5,
+      "posterior": 0.68,
+      "evidence": ["Waller speech March 12", "Bostic: 'open to adjustment'"]
+    },
+    {
+      "claim": "Tariff uncertainty creates headwinds",
+      "direction": "supports_no",
+      "weight": 0.2,
+      "confidence": 0.6,
+      "prior": 0.4,
+      "posterior": 0.45,
+      "evidence": ["New tariffs announced March 5", "Trade deficit widening"]
+    }
+  ]
+}
+```
+
+### Aggregation methods
+
+| Method | Description |
+|--------|------------|
+| `weighted_bayesian` | Weighted average of factor posteriors (default) |
+| `linear` | Simple weighted linear combination |
+| `log_odds` | Aggregation in log-odds space (better for extreme probabilities) |
+
+## Using causal decomposition in a trading bot
+
+The causal structure is useful beyond a single analysis. You can:
+
+1. **Track factor changes over time** — if the top-weighted factor shifts, re-analyze
+2. **Cross-reference factors across markets** — the same "tariff uncertainty" factor appears in multiple markets
+3. **Build custom aggregation** — weight factors differently based on your domain expertise
+
+```python
+# Re-weight factors based on your own assessment
+my_weights = {
+    "Inflation is within Fed's comfort zone": 0.40,  # I weight this higher
+    "Fed rhetoric is dovish": 0.25,
+    "Tariff uncertainty creates headwinds": 0.25,  # I weight this higher too
+}
+
+my_prob = 0
+for f in causal["factors"]:
+    w = my_weights.get(f["claim"], f["weight"])
+    my_prob += w * f["posterior"]
+
+print(f"Rekko estimate: {analysis['probability']:.0%}")
+print(f"My re-weighted estimate: {my_prob:.0%}")
+```
+
+## What's next
+
+<CardGroup cols={3}>
+  <Card title="Causal decomposition" icon="diagram-project" href="/docs/concepts/causal-decomposition">
+    Full documentation of the causal factor schema.
+  </Card>
+  <Card title="Signals API" icon="bullseye-arrow" href="/docs/api-reference/strategy/generate-signal">
+    Trading signals that use Bayesian analysis for sizing.
+  </Card>
+  <Card title="Kelly criterion" icon="calculator" href="/docs/guides/kelly-criterion-position-sizing">
+    Position sizing based on your probability estimate.
+  </Card>
+</CardGroup>

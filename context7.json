@@ -1,20 +1,4 @@
 {
-  "$schema": "https://context7.com/schema/context7.json",
-  "projectTitle": "Rekko AI API",
-  "description": "Prediction market intelligence REST API — AI research, causal analysis, trading signals, and arbitrage for Kalshi and Polymarket.",
-  "excludeFolders": [
-    "api-reference",
-    "logo"
-  ],
-  "excludeFiles": [
-    "AGENTS.md",
-    "CONTRIBUTING.md"
-  ],
-  "rules": [
-    "Base URL is https://api.rekko.ai/v1 — all endpoint paths are relative to this",
-    "Authentication uses Bearer tokens: Authorization: Bearer rk_free_... or rk_pro_...",
-    "Analysis endpoints use async trigger-poll-retrieve pattern (POST to start, GET to poll, GET to retrieve)",
-    "Expand parameter (?expand=causal,scenarios) adds nested detail to responses",
-    "OpenAPI spec at https://api.rekko.ai/openapi.json for full endpoint schemas"
-  ]
+  "url": "https://context7.com/rekko-ai/docs",
+  "public_key": "pk_MfRhTzRGAQOnu20cIktpW"
 }

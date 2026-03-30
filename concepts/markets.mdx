@@ -1,0 +1,86 @@
+---
+title: Markets
+description: How prediction markets work in the Rekko API.
+icon: chart-line
+---
+
+## Market identifiers
+
+Every market is uniquely identified by a **platform** and **market_id** pair.
+
+| Platform | ID format | Example |
+|----------|-----------|---------|
+| Kalshi | Ticker string | `KXFED-26MAR19` |
+| Polymarket | Numeric condition ID | `0x1234...abcd` |
+| Robinhood | Event slug | `fed-rate-cut-march-2026` |
+
+All endpoints that reference a specific market use the pattern:
+
+```
+/v1/markets/{platform}/{market_id}
+```
+
+## The Market object
+
+```json
+{
+  "platform": "kalshi",
+  "market_id": "KXFED-26MAR19",
+  "title": "Will the Fed cut rates at the March 2026 meeting?",
+  "url": "https://kalshi.com/markets/kxfed-26mar19",
+  "category": "economics",
+  "yes_price": 0.62,
+  "volume_24h": 48250.00,
+  "liquidity": 125000.00,
+  "open_interest": 340000.00,
+  "resolution_date": "2026-03-19T18:00:00Z",
+  "updated_at": "2026-03-24T14:30:00Z"
+}
+```
+
+## Price interpretation
+
+The `yes_price` field represents the market's implied probability that the event will occur:
+
+- `0.62` means the market prices the event at **62% likely**
+- Prices range from `0.0` (won't happen) to `1.0` (certain)
+- The difference between Rekko's estimated probability and the market price is the **edge**
+
+## Market lifecycle
+
+Markets move through these stages:
+
+| Status | Meaning |
+|--------|---------|
+| `active` | Trading is open |
+| `closed` | Trading has ended, awaiting determination |
+| `determined` | Outcome is known, settlement pending |
+| `finalized` | Fully settled and paid out |
+
+Use the [Resolution Intelligence](/api-reference/deep/resolution) endpoint for detailed resolution timing, time decay estimates, and key upcoming dates.
+
+## Platforms
+
+Rekko covers three prediction market platforms:
+
+**Kalshi** — US-regulated exchange (CFTC-regulated). Markets use ticker-style IDs (e.g., `KXBTC-26MAR14-100000`). Higher regulatory certainty, tighter spreads on popular markets.
+
+**Polymarket** — Crypto-native exchange on Polygon. Markets use condition IDs. Higher volume on political and crypto markets, wider variety of events.
+
+**Robinhood** — Prediction markets integrated into the Robinhood brokerage app. Markets use event slugs. Growing retail audience with seamless access from the existing Robinhood user base.
+
+## Listing markets
+
+```bash
+# List all markets (both platforms)
+curl https://api.rekko.ai/v1/markets \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# Filter by platform
+curl "https://api.rekko.ai/v1/markets?source=kalshi&limit=20" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+<Card title="List Markets endpoint" icon="code" href="/api-reference/markets/list-markets">
+  Full endpoint documentation with playground.
+</Card>

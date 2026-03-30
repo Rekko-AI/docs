@@ -1,0 +1,36 @@
+/* Rekko AI — custom docs styles
+   Matches the rekko.ai "Bloomberg Terminal meets TikTok" aesthetic */
+
+/* Code blocks: terminal feel with neon green accents */
+:root[class~="dark"] pre {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Cards: subtle glow on hover matching the main site */
+:root[class~="dark"] a[class*="Card"] {
+  transition: all 0.3s ease-out;
+}
+
+:root[class~="dark"] a[class*="Card"]:hover {
+  border-color: rgba(0, 232, 123, 0.25);
+  box-shadow: 0 0 24px rgba(0, 232, 123, 0.06);
+}
+
+/* API playground: match the dark card aesthetic */
+:root[class~="dark"] [class*="playground"] {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Monospace elements get JetBrains Mono */
+code, kbd, samp, pre {
+  font-family: "JetBrains Mono", ui-monospace, "Courier New", monospace;
+}
+
+/* Table styling: subtle borders like the main site */
+:root[class~="dark"] table th {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+:root[class~="dark"] table td {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}

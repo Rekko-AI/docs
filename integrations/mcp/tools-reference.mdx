@@ -9,7 +9,7 @@ All tools are available as `mcp__rekko__<tool_name>` in Claude Code or `rekko.<t
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `list_markets` | Browse current prediction markets | `source` ("kalshi", "polymarket", ""), `limit` (1-100) |
+| `list_markets` | Browse current prediction markets | `source` ("kalshi", "polymarket", "robinhood", ""), `limit` (1-100) |
 | `get_market` | Get details for a single market | `market_id`, `source` (platform hint) |
 | `search_markets` | Search markets by keyword | `query`, `limit` |
 | `get_market_history` | Price history with configurable period | `platform`, `market_id`, `period` ("48h", "7d", "30d"), `max_points` |
@@ -83,7 +83,7 @@ For convenience, `get_strategy` runs the entire flow as a single blocking call (
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `run_scraper` | Refresh market data from a platform | `platform` ("kalshi", "polymarket", "arbitrage") |
+| `run_scraper` | Refresh market data from a platform | `platform` ("kalshi", "polymarket", "robinhood", "arbitrage") |
 
 ## Webhooks
 

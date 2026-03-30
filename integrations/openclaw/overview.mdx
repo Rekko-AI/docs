@@ -4,6 +4,10 @@ description: Use Rekko as an intelligence skill in the OpenClaw agent ecosystem.
 icon: brain
 ---
 
+<Info>
+  **Source code:** [github.com/Rekko-AI/rekko-skill](https://github.com/Rekko-AI/rekko-skill)
+</Info>
+
 Rekko is available as a **SKILL.md** in the [OpenClaw](https://openclaw.org) ecosystem — an open standard for composable AI agent skills.
 
 ## Rekko's role
@@ -16,15 +20,31 @@ In the OpenClaw ecosystem, three skills work together for autonomous prediction 
 | **PolyClaw** | The Hands (Polymarket) | Executes trades on Polymarket via CTF minting + CLOB |
 | **Kalshi Trader** | The Hands (Kalshi) | Executes trades on Kalshi |
 
+Rekko also ingests market data from **Robinhood** as a supported data source for research and analysis, though Robinhood does not have a separate execution skill.
+
 Rekko provides the *why* behind market movements. Execution skills handle the *how*.
 
 ## Installation
 
 ```bash
-npx skills add rekko
+npx skills add Rekko-AI/rekko-skill
 ```
 
-This adds the `SKILL.md` to your agent's skill set. Requires `REKKO_API_KEY` in your environment.
+This adds the `SKILL.md` to your agent's skill set. Requires `REKKO_API_KEY` in your environment, or an EVM wallet with USDC on Base for x402 autopay.
+
+## Python client
+
+The repo includes `rekko_tools.py` — an async HTTP client with x402 payment support:
+
+```python
+from rekko_tools import RekkoClient
+
+async with RekkoClient() as client:
+    markets = await client.list_markets(source="kalshi", limit=30)
+    signal = await client.get_strategy("Will the Fed cut rates?")
+```
+
+See the [Python client reference](/integrations/openclaw/python-client) for full documentation.
 
 ## Example workflow
 
@@ -43,6 +63,12 @@ The SKILL.md teaches agents how to *consume* Rekko intelligence — how to call 
 ## Learn more
 
 <CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/integrations/openclaw/quickstart">
+    Get your first signal in 5 minutes.
+  </Card>
+  <Card title="Python Client" icon="python" href="/integrations/openclaw/python-client">
+    RekkoClient reference with x402 autopay.
+  </Card>
   <Card title="MCP Tools Reference" icon="wrench" href="/integrations/mcp/tools-reference">
     Full list of available tools and parameters.
   </Card>

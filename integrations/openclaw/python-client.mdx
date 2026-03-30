@@ -1,0 +1,135 @@
+---
+title: Python Client
+description: RekkoClient — async HTTP client with x402 payment support.
+icon: python
+---
+
+<Info>
+  **Source:** [`rekko_tools.py`](https://github.com/Rekko-AI/rekko-skill/blob/main/rekko_tools.py) in the rekko-skill repo
+</Info>
+
+`RekkoClient` is an async HTTP client that wraps all Rekko API endpoints. It supports both API key auth and x402 USDC micropayments on Base L2.
+
+## Installation
+
+```bash
+pip install httpx
+
+# For x402 autopay (optional)
+pip install "x402[fastapi]" eth-account
+```
+
+## Constructor
+
+```python
+from rekko_tools import RekkoClient
+
+# API key auth (reads REKKO_API_KEY from env)
+client = RekkoClient()
+
+# Explicit API key
+client = RekkoClient(api_key="rk_free_...")
+
+# x402 autopay with a signer
+from eth_account import Account
+signer = Account.from_key("0x...")
+client = RekkoClient(signer=signer)
+
+# x402 autopay (reads X402_PRIVATE_KEY from env)
+client = RekkoClient()  # auto-detects if X402_PRIVATE_KEY is set
+```
+
+Use as an async context manager:
+
+```python
+async with RekkoClient() as client:
+    markets = await client.list_markets()
+```
+
+## Methods
+
+### Market Intelligence
+
+| Method | Tier | Description |
+|--------|------|-------------|
+| `list_markets(source, limit)` | Listing | Browse current prediction markets |
+| `get_market(platform, market_id)` | Listing | Get details for a single market |
+| `search_markets(query, limit)` | Listing | Search markets by keyword |
+| `get_market_history(platform, market_id, period, max_points)` | Listing | Price history |
+
+### Screening & Discovery
+
+| Method | Tier | Description |
+|--------|------|-------------|
+| `screen_markets(market_ids, platform, min_volume_24h, min_score, limit)` | Insight | Batch screen markets by score |
+| `get_calibration(category, period, mode)` | Free | Signal accuracy metrics |
+
+### Deep Research
+
+| Method | Tier | Description |
+|--------|------|-------------|
+| `analyze_market(bet_text, platform)` | Insight | Start async analysis (returns analysis_id) |
+| `check_analysis_status(analysis_id)` | Insight | Poll analysis completion |
+| `get_analysis(analysis_id)` | Insight | Get completed analysis result |
+| `list_analyses(limit)` | Insight | List recent analyses |
+
+### Strategy & Portfolio
+
+| Method | Tier | Description |
+|--------|------|-------------|
+| `get_strategy(market_query, risk_limit)` | Strategy | Full analysis + signal (blocking, 30-90s) |
+| `get_portfolio_strategy(market_query, portfolio, bankroll_usd, max_position_pct)` | Strategy | Portfolio-aware signal |
+| `get_consensus(market_id, platform, period)` | Strategy | Consensus from agent trades |
+
+### Arbitrage
+
+| Method | Tier | Description |
+|--------|------|-------------|
+| `get_arbitrage(min_spread)` | Deep | Cross-platform arb opportunities (cached) |
+| `get_arbitrage_live(min_spread)` | Deep | Fresh arbitrage scan (10-30s) |
+
+### Correlation
+
+| Method | Tier | Description |
+|--------|------|-------------|
+| `get_correlation(market_ids, platform, period)` | Deep | Cross-market correlation graph |
+
+### Trading
+
+| Method | Tier | Description |
+|--------|------|-------------|
+| `place_shadow_trade(ticker, side, size_usd)` | Strategy | Paper trade for tracking |
+| `report_trade(market_id, platform, side, size_usd, price)` | Strategy | Report trade for consensus |
+| `get_portfolio(mode)` | Strategy | Positions and P&L |
+| `get_performance(mode)` | Strategy | Aggregate trading stats |
+| `check_resolutions()` | Strategy | Settle resolved markets |
+
+### Webhooks
+
+| Method | Tier | Description |
+|--------|------|-------------|
+| `create_webhook(url, events, secret)` | Deep | Register event webhook |
+| `list_webhooks()` | Deep | List webhooks |
+| `delete_webhook(webhook_id)` | Deep | Remove a webhook |
+
+## x402 payment flow
+
+When x402 is enabled, the client handles the payment handshake automatically:
+
+1. Client makes a request to `api.rekko.ai`
+2. Server returns `HTTP 402` with a payment envelope
+3. Client signs a USDC payment on Base L2 (chain ID 8453)
+4. Client retries the request with the signed payment proof
+5. Server verifies and settles the payment, returns data
+
+No manual header parsing needed — `RekkoClient` handles the entire loop.
+
+## Pricing tiers
+
+| Tier | Cost/call | Example methods |
+|------|-----------|-----------------|
+| Free | $0.00 | `get_calibration` |
+| Listing | $0.01 | `list_markets`, `search_markets`, `get_market_history` |
+| Insight | $0.10 | `analyze_market`, `screen_markets` |
+| Strategy | $2.00 | `get_strategy`, `get_portfolio_strategy`, `get_consensus` |
+| Deep | $5.00 | `get_arbitrage`, `get_correlation`, `create_webhook` |

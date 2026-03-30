@@ -5,15 +5,34 @@
   "colors": {
     "primary": "#00e87b",
     "light": "#00e87b",
-    "dark": "#0C8C5E",
-    "background": {
-      "dark": "#0a0a0a"
+    "dark": "#0C8C5E"
+  },
+  "appearance": {
+    "default": "dark",
+    "strict": false
+  },
+  "background": {
+    "decoration": "grid",
+    "color": {
+      "dark": "#0a0a0a",
+      "light": "#ffffff"
+    }
+  },
+  "fonts": {
+    "heading": {
+      "family": "JetBrains Mono",
+      "weight": 700
+    },
+    "body": {
+      "family": "Inter",
+      "weight": 400
     }
   },
   "favicon": "/favicon.svg",
   "logo": {
     "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "dark": "/logo/dark.svg",
+    "href": "https://rekko.ai"
   },
   "api": {
     "baseUrl": "https://api.rekko.ai",
@@ -38,6 +57,41 @@
               "quickstart",
               "authentication",
               "pricing"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/markets",
+              "concepts/analysis-pipeline",
+              "concepts/signals",
+              "concepts/causal-decomposition",
+              "concepts/expand-parameter"
+            ]
+          },
+          {
+            "group": "Tutorials",
+            "pages": [
+              "guides/prediction-market-api-comparison",
+              "guides/build-trading-bot-python",
+              "guides/kalshi-api-guide",
+              "guides/polymarket-api-guide",
+              "guides/prediction-market-arbitrage",
+              "guides/mcp-trading-workflow",
+              "guides/kelly-criterion-position-sizing",
+              "guides/predictit-alternatives",
+              "guides/manifold-markets-api-guide",
+              "guides/bayesian-analysis-prediction-markets",
+              "guides/webhooks-streaming"
+            ]
+          },
+          {
+            "group": "Account",
+            "pages": [
+              "account/dashboard",
+              "account/plans",
+              "account/rate-limits",
+              "account/quotas"
             ]
           }
         ]
@@ -141,7 +195,15 @@
           {
             "group": "OpenClaw",
             "pages": [
-              "integrations/openclaw/overview"
+              "integrations/openclaw/overview",
+              "integrations/openclaw/quickstart",
+              "integrations/openclaw/python-client"
+            ]
+          },
+          {
+            "group": "Postman",
+            "pages": [
+              "integrations/postman/overview"
             ]
           },
           {
@@ -181,8 +243,38 @@
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/rekkoai",
-      "github": "https://github.com/rekko-ai"
-    }
+      "x": "https://x.com/RekkoAI",
+      "github": "https://github.com/Rekko-AI",
+      "discord": "https://discord.gg/qTPEk9aAZg",
+      "website": "https://www.tiktok.com/@rekko.ai"
+    },
+    "links": [
+      {
+        "header": "Product",
+        "items": [
+          { "label": "rekko.ai", "href": "https://rekko.ai" },
+          { "label": "API Pricing", "href": "https://rekko.ai/pricing" },
+          { "label": "Dashboard", "href": "https://rekko.ai/dashboard" },
+          { "label": "RapidAPI", "href": "https://rapidapi.com/rekko-ai-rekko-ai-default/api/rekko-ai-prediction-market-intelligence" }
+        ]
+      },
+      {
+        "header": "Community",
+        "items": [
+          { "label": "Discord", "href": "https://discord.gg/qTPEk9aAZg" },
+          { "label": "X / Twitter", "href": "https://x.com/RekkoAI" },
+          { "label": "TikTok", "href": "https://www.tiktok.com/@rekko.ai" },
+          { "label": "GitHub", "href": "https://github.com/Rekko-AI" }
+        ]
+      },
+      {
+        "header": "Legal",
+        "items": [
+          { "label": "Terms of Service", "href": "https://rekko.ai/terms-of-service" },
+          { "label": "Privacy Policy", "href": "https://rekko.ai/privacy" },
+          { "label": "contact@rekko.ai", "href": "mailto:contact@rekko.ai" }
+        ]
+      }
+    ]
   }
 }

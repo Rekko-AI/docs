@@ -1,0 +1,318 @@
+---
+title: "Kelly Criterion Position Sizing"
+sidebarTitle: "Kelly Criterion"
+"og:title": "Kelly Criterion for Prediction Markets — Optimal Position Sizing for Trading Bots"
+description: "How to use the Kelly criterion to size prediction market positions. Full Kelly, fractional Kelly, and portfolio Kelly with code examples. Automated sizing via the Rekko API."
+icon: calculator
+---
+
+```python
+import httpx
+
+client = httpx.Client(base_url="https://api.rekko.ai/v1", headers={"Authorization": "Bearer YOUR_API_KEY"})
+signal = client.post("/signals", params={"wait": "true"}, json={"market": "kalshi/KXFED-26MAR19"}).json()
+print(f"Kelly fraction: {signal['size_pct']:.1%} → ${signal['size_pct'] * 10000:.0f} on a $10K bankroll")
+```
+
+## What this page covers
+
+- The Kelly criterion formula and why it works for prediction markets
+- Full Kelly, half Kelly, and fractional Kelly
+- Manual calculation walkthrough
+- Automated Kelly sizing with the Rekko signals API
+- Portfolio Kelly with correlation adjustment
+- Common mistakes and practical considerations
+
+---
+
+## Why position sizing matters
+
+Most prediction market traders focus on finding edge — buying underpriced outcomes. But even with consistent edge, poor position sizing destroys returns. Oversize and a few losses wipe you out. Undersize and you leave money on the table.
+
+The Kelly criterion solves this: given your estimated probability and the market price, it calculates the position size that maximizes long-term growth rate.
+
+## The Kelly formula
+
+For a binary prediction market with two outcomes (YES/NO):
+
+```
+kelly_fraction = (p * b - q) / b
+```
+
+Where:
+- `p` = your estimated probability of YES
+- `q` = 1 - p (probability of NO)
+- `b` = payout odds = (1 / market_price) - 1
+
+For prediction markets where you buy at price `c` and receive $1 if correct:
+
+```
+kelly_fraction = (p - c) / (1 - c)    # for buying YES
+kelly_fraction = (q - (1-c)) / c       # for buying NO
+```
+
+The result is the fraction of your bankroll to risk on this position.
+
+### Example
+
+A market prices YES at 0.60 (60 cents). You estimate the true probability is 0.72.
+
+```python
+p = 0.72       # Your estimated probability
+c = 0.60       # Market price (cost to buy YES)
+edge = p - c   # 0.12
+
+kelly = (p - c) / (1 - c)  # (0.72 - 0.60) / (1 - 0.60) = 0.30
+```
+
+Kelly says risk 30% of bankroll. On a $10,000 bankroll, that is a $3,000 position.
+
+## Full Kelly is aggressive
+
+Full Kelly maximizes the long-term growth rate, but it is volatile. A few consecutive losses at full Kelly can draw down your bankroll 50% or more. In practice, most traders use fractional Kelly.
+
+### Fractional Kelly
+
+Multiply the full Kelly fraction by a dampening factor:
+
+| Strategy | Formula | Aggressiveness |
+|----------|---------|---------------|
+| Full Kelly | `kelly` | Maximum growth, maximum drawdown |
+| Half Kelly | `kelly × 0.5` | 75% of full Kelly's growth, much lower drawdown |
+| Quarter Kelly | `kelly × 0.25` | Conservative, suitable for uncertain estimates |
+
+Half Kelly is the standard recommendation. You sacrifice ~25% of long-term growth but reduce variance significantly.
+
+```python
+full_kelly = (p - c) / (1 - c)
+half_kelly = full_kelly * 0.5
+
+# From the example: full Kelly = 30%, half Kelly = 15%
+position_size = half_kelly * bankroll  # $1,500 on $10K bankroll
+```
+
+### When to use which fraction
+
+| Your confidence in the probability estimate | Kelly fraction |
+|---------------------------------------------|---------------|
+| High (backtested model, large sample) | 0.5 - 0.75 |
+| Medium (solid research, some uncertainty) | 0.25 - 0.5 |
+| Low (rough estimate, limited data) | 0.1 - 0.25 |
+
+## Manual calculation in Python
+
+<CodeGroup>
+```python Python
+def kelly_size(
+    estimated_prob: float,
+    market_price: float,
+    bankroll: float,
+    fraction: float = 0.5,
+) -> dict:
+    """Calculate Kelly-optimal position size for a prediction market."""
+    edge = estimated_prob - market_price
+    if edge <= 0:
+        return {"recommendation": "NO_TRADE", "edge": edge, "size_usd": 0}
+
+    full_kelly = edge / (1 - market_price)
+    adjusted_kelly = full_kelly * fraction
+    size_usd = adjusted_kelly * bankroll
+
+    return {
+        "recommendation": "BUY_YES",
+        "edge": round(edge, 4),
+        "full_kelly": round(full_kelly, 4),
+        "adjusted_kelly": round(adjusted_kelly, 4),
+        "size_usd": round(size_usd, 2),
+    }
+
+# Example
+result = kelly_size(
+    estimated_prob=0.72,
+    market_price=0.60,
+    bankroll=10_000,
+    fraction=0.5,
+)
+print(result)
+# {'recommendation': 'BUY_YES', 'edge': 0.12, 'full_kelly': 0.3,
+#  'adjusted_kelly': 0.15, 'size_usd': 1500.0}
+```
+
+```bash cURL
+# Kelly sizing is a calculation, not an API call.
+# Use the Rekko signals API for automated sizing:
+curl -X POST "https://api.rekko.ai/v1/signals?wait=true" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"market": "kalshi/KXFED-26MAR19"}'
+```
+
+```javascript JavaScript
+function kellySize(estimatedProb, marketPrice, bankroll, fraction = 0.5) {
+  const edge = estimatedProb - marketPrice;
+  if (edge <= 0) return { recommendation: "NO_TRADE", edge, sizeUsd: 0 };
+
+  const fullKelly = edge / (1 - marketPrice);
+  const adjustedKelly = fullKelly * fraction;
+  const sizeUsd = adjustedKelly * bankroll;
+
+  return {
+    recommendation: "BUY_YES",
+    edge: Math.round(edge * 10000) / 10000,
+    fullKelly: Math.round(fullKelly * 10000) / 10000,
+    adjustedKelly: Math.round(adjustedKelly * 10000) / 10000,
+    sizeUsd: Math.round(sizeUsd * 100) / 100,
+  };
+}
+```
+</CodeGroup>
+
+## Automated Kelly sizing with Rekko
+
+The Rekko signals API handles the entire chain: estimate the true probability via deep research, calculate edge against market price, and return a Kelly-derived `size_pct`:
+
+<CodeGroup>
+```python Python
+import httpx
+
+client = httpx.Client(
+    base_url="https://api.rekko.ai/v1",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+    timeout=120.0,
+)
+
+signal = client.post("/signals", params={"wait": "true"}, json={
+    "market": "kalshi/KXFED-26MAR19",
+    "risk_limit": "medium",
+}).json()
+
+print(f"Recommendation: {signal['recommendation']}")
+print(f"Estimated probability: {signal['target_price']:.0%}")
+print(f"Market price: implied from edge")
+print(f"Edge: {signal['edge']:.1%}")
+print(f"Confidence: {signal['confidence']:.0%}")
+print(f"Risk rating: {signal['risk_rating']}")
+print(f"Kelly fraction: {signal['size_pct']:.1%}")
+
+bankroll = 10_000
+position = signal["size_pct"] * bankroll
+print(f"Position size: ${position:.0f} on ${bankroll:,} bankroll")
+```
+
+```bash cURL
+curl -X POST "https://api.rekko.ai/v1/signals?wait=true" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"market": "kalshi/KXFED-26MAR19", "risk_limit": "medium"}'
+```
+
+```javascript JavaScript
+const resp = await fetch("https://api.rekko.ai/v1/signals?wait=true", {
+  method: "POST",
+  headers: {
+    Authorization: "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    market: "kalshi/KXFED-26MAR19",
+    risk_limit: "medium",
+  }),
+});
+const signal = await resp.json();
+const bankroll = 10000;
+console.log(`Position: $${(signal.size_pct * bankroll).toFixed(0)} (${(signal.size_pct * 100).toFixed(1)}%)`);
+```
+</CodeGroup>
+
+The `risk_limit` parameter adjusts the Kelly fraction:
+
+| Risk limit | Kelly fraction | Use case |
+|-----------|---------------|----------|
+| `low` | ~Quarter Kelly | Conservative, uncertain estimates |
+| `medium` | ~Half Kelly | Standard recommendation |
+| `high` | ~Three-quarter Kelly | High confidence, aggressive |
+
+## Portfolio Kelly
+
+When you hold multiple positions, correlations matter. Two positions on related markets (Fed rate cut + Treasury yields) amplify each other — sizing each independently overstates the safe allocation.
+
+The portfolio signal endpoint accounts for this:
+
+<CodeGroup>
+```python Python
+signal = client.post("/signals/portfolio", params={"wait": "true"}, json={
+    "market": "kalshi/KXBITCOIN-26APR",
+    "portfolio": [
+        {"market_id": "KXFED-26MAR19", "platform": "kalshi", "side": "yes", "size_usd": 1500},
+        {"market_id": "KXINFLATION-26MAY", "platform": "kalshi", "side": "no", "size_usd": 800},
+    ],
+    "bankroll_usd": 10000,
+}).json()
+
+print(f"Recommendation: {signal['recommendation']}")
+print(f"Adjusted size: {signal['size_pct']:.1%}")  # Accounts for correlation
+if signal.get("concentration_warning"):
+    print(f"Warning: {signal['concentration_warning']}")
+if signal.get("hedge"):
+    print(f"Hedge suggestion: {signal['hedge']}")
+```
+
+```bash cURL
+curl -X POST "https://api.rekko.ai/v1/signals/portfolio?wait=true" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "market": "kalshi/KXBITCOIN-26APR",
+    "portfolio": [
+      {"market_id": "KXFED-26MAR19", "platform": "kalshi", "side": "yes", "size_usd": 1500}
+    ],
+    "bankroll_usd": 10000
+  }'
+```
+
+```javascript JavaScript
+const resp = await fetch("https://api.rekko.ai/v1/signals/portfolio?wait=true", {
+  method: "POST",
+  headers: { Authorization: "Bearer YOUR_API_KEY", "Content-Type": "application/json" },
+  body: JSON.stringify({
+    market: "kalshi/KXBITCOIN-26APR",
+    portfolio: [
+      { market_id: "KXFED-26MAR19", platform: "kalshi", side: "yes", size_usd: 1500 },
+    ],
+    bankroll_usd: 10000,
+  }),
+});
+const signal = await resp.json();
+```
+</CodeGroup>
+
+The portfolio endpoint provides:
+- **Adjusted Kelly fraction** accounting for correlation with existing positions
+- **Concentration warnings** when too much capital is in correlated markets
+- **Hedge suggestions** to reduce portfolio risk
+
+## Common mistakes
+
+**Overestimating your edge.** If your probability estimate is wrong, Kelly amplifies the error. A 5-point overestimate in edge leads to significant oversizing. Use fractional Kelly to protect against estimation error.
+
+**Ignoring fees.** Kalshi taker fees reduce effective edge. Subtract fees before calculating Kelly.
+
+**Sizing each position independently.** Correlated positions compound risk. Use portfolio-aware sizing.
+
+**Using full Kelly.** Academic Kelly assumes perfect probability estimates. Real estimates have uncertainty. Half Kelly is almost always better in practice.
+
+**Not accounting for illiquidity.** Your position is locked until the market resolves. Size based on capital you can afford to lock up, not your total bankroll.
+
+## What's next
+
+<CardGroup cols={3}>
+  <Card title="Build a trading bot" icon="robot" href="/docs/guides/build-trading-bot-python">
+    Apply Kelly sizing in an automated trading pipeline.
+  </Card>
+  <Card title="Signals API reference" icon="bullseye-arrow" href="/docs/api-reference/strategy/generate-signal">
+    Full documentation for the signals endpoint.
+  </Card>
+  <Card title="Portfolio signals" icon="chart-pie" href="/docs/api-reference/strategy/portfolio-signal">
+    Portfolio-aware sizing with correlation analysis.
+  </Card>
+</CardGroup>
