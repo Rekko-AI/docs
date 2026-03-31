@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Rekko AI \u2014 Prediction Market Intelligence",
-    "description": "The brain for prediction market trading. Deep AI research, Bayesian causal decomposition, portfolio-aware strategy signals, cross-platform arbitrage, and execution guidance \u2014 all in one API. Covers Kalshi, Polymarket, and Robinhood. Clean flat JSON designed for developers and autonomous trading agents.",
+    "description": "The brain for prediction market trading. Deep AI research, Bayesian causal decomposition, portfolio-aware strategy signals, cross-platform arbitrage, and execution guidance \u2014 all in one API. Covers Kalshi, Polymarket, Robinhood, and Coinbase. Clean flat JSON designed for developers and autonomous trading agents.",
     "contact": {
       "name": "Rekko AI",
       "url": "https://rekko.ai/"
@@ -1601,7 +1601,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi, polymarket, or robinhood"
+            "description": "kalshi, polymarket, robinhood, or coinbase"
           },
           "market_id": {
             "type": "string",
@@ -2027,7 +2027,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi, polymarket, or robinhood"
+            "description": "kalshi, polymarket, robinhood, or coinbase"
           },
           "market_id": {
             "type": "string",
@@ -2810,7 +2810,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi, polymarket, or robinhood"
+            "description": "kalshi, polymarket, robinhood, or coinbase"
           },
           "title": {
             "type": "string",
@@ -3105,7 +3105,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi, polymarket, or robinhood"
+            "description": "kalshi, polymarket, robinhood, or coinbase"
           },
           "market_id": {
             "type": "string",
@@ -3128,6 +3128,14 @@
             "title": "Category",
             "description": "Market category if known",
             "default": ""
+          },
+          "also_on": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Also On",
+            "description": "Cross-platform URLs for the same market (e.g. coinbase, robinhood)"
           },
           "yes_price": {
             "type": "number",
@@ -3199,6 +3207,9 @@
         "title": "Market",
         "description": "Prediction market with live pricing data.",
         "example": {
+          "also_on": {
+            "coinbase": "https://www.coinbase.com/predictions/event/KXFED-26MAR19"
+          },
           "category": "economics",
           "liquidity": 85000.0,
           "market_id": "KXFED-26MAR19",
@@ -3469,7 +3480,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi, polymarket, or robinhood"
+            "description": "kalshi, polymarket, robinhood, or coinbase"
           },
           "market_id": {
             "type": "string",
@@ -3518,7 +3529,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi, polymarket, or robinhood"
+            "description": "kalshi, polymarket, robinhood, or coinbase"
           },
           "market_id": {
             "type": "string",
@@ -3717,7 +3728,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi, polymarket, or robinhood"
+            "description": "kalshi, polymarket, robinhood, or coinbase"
           },
           "title": {
             "type": "string",
@@ -3917,7 +3928,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi, polymarket, or robinhood"
+            "description": "kalshi, polymarket, robinhood, or coinbase"
           },
           "market_id": {
             "type": "string",
@@ -4184,7 +4195,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi, polymarket, or robinhood"
+            "description": "kalshi, polymarket, robinhood, or coinbase"
           },
           "market_id": {
             "type": "string",
@@ -4378,7 +4389,7 @@
           "platform": {
             "type": "string",
             "title": "Platform",
-            "description": "kalshi, polymarket, or robinhood"
+            "description": "kalshi, polymarket, robinhood, or coinbase"
           },
           "title": {
             "type": "string",
