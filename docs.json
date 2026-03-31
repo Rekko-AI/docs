@@ -106,6 +106,16 @@
             ]
           },
           {
+            "group": "Events",
+            "pages": [
+              "api-reference/events/list-events",
+              "api-reference/events/trending-events",
+              "api-reference/events/search-events",
+              "api-reference/events/get-event",
+              "api-reference/events/event-markets"
+            ]
+          },
+          {
             "group": "Markets",
             "pages": [
               "api-reference/markets/list-markets",
