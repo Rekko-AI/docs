@@ -219,11 +219,13 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "Filter by platform: 'kalshi' or 'polymarket'",
+              "maxLength": 20,
+              "pattern": "^(kalshi|polymarket|robinhood|)$",
+              "description": "Filter by platform",
               "default": "",
               "title": "Source"
             },
-            "description": "Filter by platform: 'kalshi' or 'polymarket'"
+            "description": "Filter by platform"
           },
           {
             "name": "category",
@@ -231,6 +233,7 @@
             "required": false,
             "schema": {
               "type": "string",
+              "maxLength": 50,
               "description": "Filter by category (e.g., 'politics', 'crypto')",
               "default": "",
               "title": "Category"
@@ -366,6 +369,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
+              "maxLength": 500,
               "description": "Search query (supports semantic + keyword matching)",
               "title": "Q"
             },
@@ -429,8 +433,11 @@
             "required": true,
             "schema": {
               "type": "string",
+              "maxLength": 200,
+              "description": "Event slug (e.g., 'kalshi:kxtrumpadminleave-26dec31')",
               "title": "Slug"
-            }
+            },
+            "description": "Event slug (e.g., 'kalshi:kxtrumpadminleave-26dec31')"
           },
           {
             "name": "expand",
@@ -438,6 +445,7 @@
             "required": false,
             "schema": {
               "type": "string",
+              "maxLength": 100,
               "description": "Comma-separated expansions: 'markets'",
               "default": "",
               "title": "Expand"
@@ -484,6 +492,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "maxLength": 200,
               "title": "Slug"
             }
           }
@@ -531,11 +540,13 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "Filter by platform: 'kalshi', 'polymarket', or 'robinhood'",
+              "maxLength": 20,
+              "pattern": "^(kalshi|polymarket|robinhood|)$",
+              "description": "Filter by platform",
               "default": "",
               "title": "Source"
             },
-            "description": "Filter by platform: 'kalshi', 'polymarket', or 'robinhood'"
+            "description": "Filter by platform"
           },
           {
             "name": "query",
@@ -543,6 +554,7 @@
             "required": false,
             "schema": {
               "type": "string",
+              "maxLength": 500,
               "description": "Search markets by keyword in title (case-insensitive)",
               "default": "",
               "title": "Query"
