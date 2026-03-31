@@ -204,6 +204,318 @@
         }
       }
     },
+    "/v1/events": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "List prediction market events",
+        "description": "List prediction market events grouped with aggregate stats.\n\nEvents group related individual markets (e.g., \"Who will leave the Trump\nadministration?\" groups 32 individual outcome markets). Sorted by\naggregate 24h volume descending.",
+        "operationId": "/v1/events",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Filter by platform: 'kalshi' or 'polymarket'",
+              "default": "",
+              "title": "Source"
+            },
+            "description": "Filter by platform: 'kalshi' or 'polymarket'"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Filter by category (e.g., 'politics', 'crypto')",
+              "default": "",
+              "title": "Category"
+            },
+            "description": "Filter by category (e.g., 'politics', 'crypto')"
+          },
+          {
+            "name": "featured",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only featured events (true) or all (omit)",
+              "title": "Featured"
+            },
+            "description": "Only featured events (true) or all (omit)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Maximum events to return",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Maximum events to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventSummary"
+                  },
+                  "title": "Response /V1/Events"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events/trending": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Trending events",
+        "description": "Top prediction market events by trending score.\n\nCombines featured status, volume, and recency. Designed for AI agents\nthat want a quick overview of what's hot in prediction markets.",
+        "operationId": "/v1/events/trending",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "Maximum events to return",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Maximum events to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventSummary"
+                  },
+                  "title": "Response /V1/Events/Trending"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events/search": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Search events",
+        "description": "Search events using hybrid full-text + semantic vector search.\n\nFinds events matching by keyword (\"Iran\") and by meaning (\"US military\nMiddle East\" matches \"US forces enter Iran\"). Uses Reciprocal Rank\nFusion to combine both signals.",
+        "operationId": "/v1/events/search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Search query (supports semantic + keyword matching)",
+              "title": "Q"
+            },
+            "description": "Search query (supports semantic + keyword matching)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "description": "Maximum results",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Maximum results"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventSummary"
+                  },
+                  "title": "Response /V1/Events/Search"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events/{slug}": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Get event details",
+        "description": "Get a single event with aggregate stats and optionally all its markets.\n\nUse ?expand=markets to include individual outcome markets in the response.",
+        "operationId": "/v1/events/{slug}",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated expansions: 'markets'",
+              "default": "",
+              "title": "Expand"
+            },
+            "description": "Comma-separated expansions: 'markets'"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Event"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events/{slug}/markets": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "List markets in event",
+        "description": "List all individual outcome markets within an event.\n\nReturns markets sorted by 24h volume descending.",
+        "operationId": "/v1/events/{slug}/markets",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventMarketSummary"
+                  },
+                  "title": "Response /V1/Events/{Slug}/Markets"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/markets": {
       "get": {
         "tags": [
@@ -2800,6 +3112,233 @@
           "platform": "kalshi"
         }
       },
+      "Event": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug",
+            "description": "URL-safe event identifier (e.g., 'kalshi:kxtrumpadminleave-26dec31')"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Event question (e.g., 'Who will leave the Trump administration?')"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Event category (politics, economics, sports, etc.)",
+            "default": ""
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Primary platform (kalshi, polymarket)"
+          },
+          "market_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Market Count",
+            "description": "Number of individual outcome markets in this event"
+          },
+          "total_volume_24h": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Total Volume 24H",
+            "description": "Aggregate 24h volume across all markets in USD"
+          },
+          "top_yes_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Yes Price",
+            "description": "Highest-probability outcome price"
+          },
+          "featured": {
+            "type": "boolean",
+            "title": "Featured",
+            "description": "Platform is actively promoting this event",
+            "default": false
+          },
+          "also_on": {
+            "items": {
+              "$ref": "#/components/schemas/EventPlatformPresence"
+            },
+            "type": "array",
+            "title": "Also On",
+            "description": "Same event on other platforms (cross-platform linking via embedding similarity)"
+          },
+          "markets": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EventMarketSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Markets",
+            "description": "Individual outcome markets (include with ?expand=markets)"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "When aggregate stats were last refreshed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "platform",
+          "market_count",
+          "total_volume_24h",
+          "updated_at"
+        ],
+        "title": "Event",
+        "description": "Prediction market event grouping related outcome markets.\n\nAn event like \"Who will leave the Trump administration?\" contains\nmultiple individual markets (one per potential leaver). This model\naggregates them with pre-computed stats."
+      },
+      "EventMarketSummary": {
+        "properties": {
+          "market_id": {
+            "type": "string",
+            "title": "Market Id",
+            "description": "Platform-specific market identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Outcome title (e.g., 'Pam Bondi', 'At least 80 days')"
+          },
+          "yes_price": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Yes Price",
+            "description": "Current YES probability"
+          },
+          "volume_24h": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Volume 24H",
+            "description": "24h volume in USD",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "market_id",
+          "title",
+          "yes_price"
+        ],
+        "title": "EventMarketSummary",
+        "description": "Individual outcome market within an event (compact)."
+      },
+      "EventPlatformPresence": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Platform name (kalshi, polymarket, etc.)"
+          },
+          "event_id": {
+            "type": "string",
+            "title": "Event Id",
+            "description": "Platform-specific event identifier"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Event page URL on this platform",
+            "default": ""
+          },
+          "market_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Market Count",
+            "description": "Number of markets on this platform",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "event_id"
+        ],
+        "title": "EventPlatformPresence",
+        "description": "Cross-platform availability for an event."
+      },
+      "EventSummary": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug",
+            "description": "URL-safe event identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Event question"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Event category",
+            "default": ""
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Primary platform"
+          },
+          "market_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Market Count",
+            "description": "Number of outcome markets"
+          },
+          "total_volume_24h": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Total Volume 24H",
+            "description": "Aggregate 24h volume in USD"
+          },
+          "featured": {
+            "type": "boolean",
+            "title": "Featured",
+            "description": "Platform-promoted event",
+            "default": false
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Last refresh timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "platform",
+          "market_count",
+          "total_volume_24h",
+          "updated_at"
+        ],
+        "title": "EventSummary",
+        "description": "Compact event summary for list endpoints."
+      },
       "ExecutionGuidance": {
         "properties": {
           "market_id": {
@@ -3188,6 +3727,30 @@
             ],
             "title": "Resolution Date",
             "description": "Expected resolution date (ISO 8601)"
+          },
+          "event_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Slug",
+            "description": "Parent event identifier (groups related markets)"
+          },
+          "event_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Title",
+            "description": "Parent event title (e.g., 'Who will leave the Trump administration?')"
           },
           "updated_at": {
             "type": "string",
