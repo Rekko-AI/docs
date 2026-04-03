@@ -525,6 +525,209 @@
         }
       }
     },
+    "/v1/events/{slug}/analyze": {
+      "post": {
+        "tags": [
+          "Event Analysis"
+        ],
+        "summary": "Trigger event analysis",
+        "description": "Trigger an asynchronous event analysis on a group of related markets.\n\nReturns an analysis_id (run_id) that can be polled via GET /events/{slug}/analysis.\nRequires INSIGHT tier.",
+        "operationId": "/v1/events/{slug}/analyze",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Event slug",
+              "title": "Slug"
+            },
+            "description": "Event slug"
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Re-analyze even if a recent analysis exists",
+              "default": false,
+              "title": "Force"
+            },
+            "description": "Re-analyze even if a recent analysis exists"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response /V1/Events/{Slug}/Analyze"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events/{slug}/analysis": {
+      "get": {
+        "tags": [
+          "Event Analysis"
+        ],
+        "summary": "Get event analysis",
+        "description": "Fetch the latest completed event analysis.\n\nReturns 404 if no analysis exists, 202 if still running.\nRequires INSIGHT tier.",
+        "operationId": "/v1/events/{slug}/analysis",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Event slug",
+              "title": "Slug"
+            },
+            "description": "Event slug"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventAnalysisResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events/{slug}/probability-map": {
+      "get": {
+        "tags": [
+          "Event Analysis"
+        ],
+        "summary": "Event probability map",
+        "description": "All outcome probabilities for an event: market price vs estimated probability.\n\nLightweight extraction from the latest analysis \u2014 no new pipeline run.\nRequires INSIGHT tier.",
+        "operationId": "/v1/events/{slug}/probability-map",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Event slug",
+              "title": "Slug"
+            },
+            "description": "Event slug"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventProbabilityMap"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events/{slug}/correlation": {
+      "get": {
+        "tags": [
+          "Event Analysis"
+        ],
+        "summary": "Event market correlations",
+        "description": "Within-event market correlations from the latest analysis.\n\nReturns detected relationships: mutually_exclusive, positively_correlated,\nnegatively_correlated, conditional, independent.\nRequires DEEP tier.",
+        "operationId": "/v1/events/{slug}/correlation",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Event slug",
+              "title": "Slug"
+            },
+            "description": "Event slug"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response /V1/Events/{Slug}/Correlation"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/markets": {
       "get": {
         "tags": [
@@ -3136,6 +3339,12 @@
             "title": "Title",
             "description": "Event question (e.g., 'Who will leave the Trump administration?')"
           },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Event subtitle or description",
+            "default": ""
+          },
           "category": {
             "type": "string",
             "title": "Category",
@@ -3172,6 +3381,37 @@
             ],
             "title": "Top Yes Price",
             "description": "Highest-probability outcome price"
+          },
+          "mutually_exclusive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mutually Exclusive",
+            "description": "Whether outcomes are mutually exclusive (probabilities should sum to ~1.0)"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Event status: open, closed, settled",
+            "default": "open"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date",
+            "description": "When the event resolves/expires"
           },
           "featured": {
             "type": "boolean",
@@ -3221,6 +3461,133 @@
         "title": "Event",
         "description": "Prediction market event grouping related outcome markets.\n\nAn event like \"Who will leave the Trump administration?\" contains\nmultiple individual markets (one per potential leaver). This model\naggregates them with pre-computed stats."
       },
+      "EventAnalysisResponse": {
+        "properties": {
+          "event_slug": {
+            "type": "string",
+            "title": "Event Slug",
+            "description": "Event slug identifier"
+          },
+          "event_title": {
+            "type": "string",
+            "title": "Event Title",
+            "description": "Event question/title"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Primary platform"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Event category",
+            "default": ""
+          },
+          "market_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Market Count",
+            "description": "Total markets in the event"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "description": "Executive summary of the event analysis"
+          },
+          "recommendation": {
+            "type": "string",
+            "title": "Recommendation",
+            "description": "Best value recommendation or NO_BET"
+          },
+          "top_picks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Top Picks",
+            "description": "Market titles with best edge"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "description": "Overall analysis confidence"
+          },
+          "market_breakdowns": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Market Breakdowns",
+            "description": "Per-market probability estimates: {title, estimated_probability, market_price, edge, confidence, one_liner}"
+          },
+          "correlations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Correlations",
+            "description": "Market correlations: {market_a_title, market_b_title, relationship, explanation}"
+          },
+          "probability_sum": {
+            "type": "number",
+            "title": "Probability Sum",
+            "description": "Sum of estimated probabilities (for mutex events, should be ~1.0)",
+            "default": 0.0
+          },
+          "mutually_exclusive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mutually Exclusive",
+            "description": "Whether outcomes are mutually exclusive"
+          },
+          "what_would_change_mind": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "What Would Change Mind",
+            "description": "What would change the recommendation"
+          },
+          "analyzed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Analyzed At",
+            "description": "When the analysis was produced"
+          },
+          "models_used": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models Used",
+            "description": "Model identifiers used"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_slug",
+          "event_title",
+          "platform",
+          "market_count",
+          "summary",
+          "recommendation",
+          "confidence",
+          "analyzed_at"
+        ],
+        "title": "EventAnalysisResponse",
+        "description": "Event analysis result for the Feed API."
+      },
       "EventMarketSummary": {
         "properties": {
           "market_id": {
@@ -3246,6 +3613,38 @@
             "title": "Volume 24H",
             "description": "24h volume in USD",
             "default": 0.0
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Platform page URL for this market",
+            "default": ""
+          },
+          "open_interest": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Interest",
+            "description": "Open interest (contracts outstanding)"
+          },
+          "spread": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread",
+            "description": "Bid-ask spread (yes_ask - yes_bid)"
           }
         },
         "type": "object",
@@ -3290,6 +3689,68 @@
         ],
         "title": "EventPlatformPresence",
         "description": "Cross-platform availability for an event."
+      },
+      "EventProbabilityMap": {
+        "properties": {
+          "event_slug": {
+            "type": "string",
+            "title": "Event Slug",
+            "description": "Event slug identifier"
+          },
+          "event_title": {
+            "type": "string",
+            "title": "Event Title",
+            "description": "Event question/title"
+          },
+          "mutually_exclusive": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mutually Exclusive",
+            "description": "Whether outcomes are mutually exclusive"
+          },
+          "probability_sum": {
+            "type": "number",
+            "title": "Probability Sum",
+            "description": "Sum of estimated probabilities across all outcomes"
+          },
+          "probability_sum_valid": {
+            "type": "boolean",
+            "title": "Probability Sum Valid",
+            "description": "Whether the probability sum is valid (for mutex events: ~1.0)"
+          },
+          "outcomes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Outcomes",
+            "description": "Per-outcome: {title, market_price, estimated_probability, edge}"
+          },
+          "analyzed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Analyzed At",
+            "description": "When the analysis was produced"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_slug",
+          "event_title",
+          "probability_sum",
+          "probability_sum_valid",
+          "outcomes",
+          "analyzed_at"
+        ],
+        "title": "EventProbabilityMap",
+        "description": "Probability map for all outcomes in an event."
       },
       "EventSummary": {
         "properties": {
