@@ -1,23 +1,268 @@
 # Video Virality Implementation Plan
 
-Based on [VIDEO_VIRALITY.md](./VIDEO_VIRALITY.md) research. Phases 1-4 are independent. Phase 5 needs Phase 2. Phase 6 needs Phase 5.
+Based on [VIDEO_VIRALITY_RESEARCH.md](./VIDEO_VIRALITY_RESEARCH.md) research. Updated 2026-04-04 based on James + Daniel discussion.
+
+Phase 1 is the current priority. Phases 2-4 are independent. Phase 5 needs Phase 3. Phase 6 needs Phase 5.
 
 ---
 
-## Phase 1: Script Quality Upgrades (prompt-only edits)
+## Phase 1: Trend & Viral Video Discovery System
+
+**Goal**: Daily-updated DB of viral/popular topics and viral/popular short-form videos, tracked over time (days viral, velocity, decay). This feeds content strategy — what to make videos about, what formats are working.
+
+**Effort**: Medium. **Impact**: High (compounds over time — data-driven content decisions from day one).
+
+**Owner**: James (scraping + data). Daniel uses the output to clone winning formats.
+
+**Decisions**: All 4 sources built at once. SQLite-only (no Neon dual-write). DB-only (no JSON file manifests). CLI entry point first (scheduler loop later). `asyncpraw` for Reddit (native async).
+
+### Update 2026-04-04 (James + Daniel discussion)
+- [James] Tinker with ScrapeCreators to find most viral / popular videos
+- [Dan] Figure out how to take 1 of the videos and clone it in new style
+- [James] Nail down the manual operations (TikTok, Facebook, Instagram, YouTube)
+- [TBD] Write something to get analytics on published videos (e.g. TikTok Creator API)
+
+### 1A. Data Sources
+
+| Source | What it provides | Cost | Library |
+|---|---|---|---|
+| **ScrapeCreators** (existing client) | TikTok trending feed, hashtag popularity, keyword video search with engagement metrics | $10/5000 credits | `publishing/scrapecreators.py` — already built |
+| **Google Trends** | Real-time trending search topics, interest over time, related queries | Free | `pytrends` (new dep) |
+| **YouTube Data API v3** | Viral Shorts by keyword search, trending videos, engagement metrics | Free (10k quota/day) | `google-api-python-client` (already in pipeline extra), uses existing `GOOGLE_API_KEY` |
+| **Reddit API** | Trending posts in prediction market / finance subreddits | Free (100 req/min) | `asyncpraw` (new dep, native async) |
+| **Kalshi/Polymarket DB** | Existing scraped markets — titles, volumes, categories, price movements | Free (already in `rekko.db`) | `rekko_server.data` |
+
+No cross-referencing trending topics ↔ existing markets for now — each source stores its own data with source attribution and metadata. Market cross-referencing is a future enhancement (keyword overlap → LLM matching).
+
+### 1B. DB Schema (4 tables)
+
+**Modify**: `src/rekko_server/db/schema.py` — add to `init_schema()`. All use `CREATE TABLE IF NOT EXISTS`.
+
+**Note**: `days_trending`/`days_viral` are `GENERATED ALWAYS AS ... STORED` columns — must be EXCLUDED from all INSERT/UPDATE SQL.
+
+```sql
+CREATE TABLE IF NOT EXISTS viral_topics (
+    id TEXT PRIMARY KEY,                -- source:topic_key (e.g., "google_trends:tariffs")
+    source TEXT NOT NULL,               -- google_trends | reddit | scrapecreators
+    topic TEXT NOT NULL,                -- human-readable topic name
+    category TEXT,                      -- finance, politics, crypto, sports, entertainment, etc.
+    metadata JSON,                      -- source-specific: subreddit, search_volume, related_queries, etc.
+    first_seen_at TIMESTAMP NOT NULL,
+    last_seen_at TIMESTAMP NOT NULL,
+    peak_score REAL,                    -- highest trending score observed
+    current_score REAL,                 -- latest trending score
+    days_trending INTEGER GENERATED ALWAYS AS (
+        CAST((julianday(last_seen_at) - julianday(first_seen_at)) AS INTEGER) + 1
+    ) STORED
+);
+
+CREATE TABLE IF NOT EXISTS viral_topic_snapshots (
+    topic_id TEXT NOT NULL REFERENCES viral_topics(id),
+    source TEXT NOT NULL,               -- denormalized for query convenience
+    measured_at TIMESTAMP NOT NULL,
+    score REAL NOT NULL,                -- normalized 0-100 trending score
+    metadata JSON,                      -- source-specific raw metrics
+    PRIMARY KEY (topic_id, measured_at)
+);
+
+CREATE TABLE IF NOT EXISTS viral_videos (
+    id TEXT PRIMARY KEY,                -- source:video_id (e.g., "tiktok:7349281234")
+    source TEXT NOT NULL,               -- tiktok | youtube_shorts
+    platform_video_id TEXT NOT NULL,
+    creator_handle TEXT,
+    creator_follower_count INTEGER,
+    title TEXT,
+    description TEXT,
+    duration_seconds REAL,
+    hashtags JSON,                      -- ["prediction", "kalshi", "stocks"]
+    category TEXT,
+    url TEXT,
+    metadata JSON,                      -- source-specific: sound_id, effect_ids, etc.
+    first_seen_at TIMESTAMP NOT NULL,
+    last_seen_at TIMESTAMP NOT NULL,
+    peak_views INTEGER,
+    days_viral INTEGER GENERATED ALWAYS AS (
+        CAST((julianday(last_seen_at) - julianday(first_seen_at)) AS INTEGER) + 1
+    ) STORED
+);
+
+CREATE TABLE IF NOT EXISTS viral_video_snapshots (
+    video_id TEXT NOT NULL REFERENCES viral_videos(id),
+    source TEXT NOT NULL,               -- denormalized for query convenience
+    measured_at TIMESTAMP NOT NULL,
+    views INTEGER,
+    likes INTEGER,
+    comments INTEGER,
+    shares INTEGER,
+    view_velocity REAL,                 -- views gained since last snapshot / hours elapsed
+    metadata JSON,                      -- source-specific raw metrics
+    PRIMARY KEY (video_id, measured_at)
+);
+```
+
+Indexes: `source` + `last_seen_at` on parent tables, FK columns on snapshot tables.
+
+### 1C. Implementation Tasks
+
+#### T-1: Pydantic Models
+**New file**: `src/rekko_server/models/viral.py`
+
+`ViralTopic`, `ViralTopicSnapshot`, `ViralVideo`, `ViralVideoSnapshot`. Every `Field()` gets `description`. `metadata` uses `default_factory=dict`. `hashtags` uses `default_factory=list`.
+
+#### T-2: DB Schema
+**Modify**: `src/rekko_server/db/schema.py`
+
+Add the 4 tables + indexes to `init_schema()`. Pattern: `CREATE TABLE IF NOT EXISTS` (same as existing tables).
+
+#### T-3: DB Write Functions
+**New file**: `src/rekko_server/db/viral.py`
+
+Follow pattern from `db/markets.py`. Functions:
+- `upsert_viral_topic(conn, topic)` — `INSERT ON CONFLICT` updates `last_seen_at`, `current_score`, `peak_score = MAX(peak_score, excluded.peak_score)`
+- `record_topic_snapshot(conn, snapshot)` — `INSERT ON CONFLICT` updates score + metadata
+- `upsert_viral_video(conn, video)` — `INSERT ON CONFLICT` updates `last_seen_at`, `peak_views = MAX(...)`
+- `record_video_snapshot(conn, snapshot)` — `INSERT ON CONFLICT` updates all metrics
+
+#### T-4: Config
+**Modify**: `src/rekko_server/config.py`
+
+Add to `Settings`: `reddit_client_id: str = ""`, `reddit_client_secret: str = ""`, `reddit_user_agent: str = "rekko-server:v1 (by /u/rekko_ai)"`. YouTube reuses existing `google_api_key`.
+
+#### T-5: Dependencies
+**Modify**: `pyproject.toml`
+
+New extra: `trends = ["pytrends>=4.9", "asyncpraw>=7.7"]`. `google-api-python-client` already in `pipeline` extra.
+
+#### T-6: Google Trends Scraper
+**New file**: `src/rekko_server/scrapers/google_trends.py`
+
+- `pytrends.trending_searches()` for real-time trending topics
+- Wrap synchronous pytrends calls in `asyncio.to_thread()`
+- 5s delay between calls (Google rate-limits aggressively)
+- Score: rank-based (1st = 100, 20th = 5). Google Trends interest_over_time scores are 0-100 natively.
+- ID format: `google_trends:{topic_slug}`
+- **Risk**: pytrends is flaky (unofficial wrapper). Fully isolated behind try/except — failure must never crash orchestrator. Fallback: SerpAPI Google Trends endpoint (existing `serp_api_key`).
+
+#### T-7: YouTube Shorts Scraper
+**New file**: `src/rekko_server/scrapers/youtube_shorts.py`
+
+- `googleapiclient.discovery.build("youtube", "v3", developerKey=...)` (lib already in deps)
+- `search.list(type="video", videoDuration="short", order="viewCount", publishedAfter=7d_ago)`
+- Then `videos.list(id=..., part="statistics,snippet,contentDetails")` for full stats
+- Wrap synchronous API calls in `asyncio.to_thread()`
+- Search keywords: `["prediction market", "kalshi", "polymarket", "sports betting odds", "election odds", "crypto prediction"]`
+- Quota budget: ~50 searches (5000 units) + 500 video detail lookups (500 units) per day within free 10k tier
+- ID format: `youtube_shorts:{video_id}`
+
+#### T-8: Reddit Trends Scraper
+**New file**: `src/rekko_server/scrapers/reddit_trends.py`
+
+- `asyncpraw` — native async, no thread wrapping needed
+- Subreddits: `wallstreetbets, polymarket, kalshi, sportsbook, sportsbetting, stocks, cryptocurrency`
+- Fetch 25 hot posts per subreddit, filter by `MIN_SCORE=50`
+- ID format: `reddit:{subreddit}:{post_id}`
+- Score = raw upvotes (no normalization). metadata: `{subreddit, upvote_ratio, num_comments, url}`
+- Skip gracefully if `reddit_client_id` is empty (log warning, return `[]`)
+
+#### T-9: ScrapeCreators Extension
+**Modify**: `src/rekko_server/publishing/scrapecreators.py`
+
+Add `discover_viral_videos(client, conn=None)`:
+- Calls existing `get_trending_feed()` (currently unused)
+- Parses `aweme_list` items → `ViralVideo` + `ViralVideoSnapshot`
+- Extracts: `aweme_id`, `author.unique_id`, `author.follower_count`, `desc`, `statistics.*`
+- Uses existing `_extract_hashtags_from_desc()`
+- Does NOT modify existing `research_trends()` — additive only
+
+#### T-10: Orchestrator + CLI
+**New file**: `src/rekko_server/scrapers/viral_discovery.py`
+
+```bash
+uv run python -m rekko_server.scrapers.viral_discovery              # All sources
+uv run python -m rekko_server.scrapers.viral_discovery --source tiktok
+uv run python -m rekko_server.scrapers.viral_discovery --source youtube
+uv run python -m rekko_server.scrapers.viral_discovery --source google_trends
+uv run python -m rekko_server.scrapers.viral_discovery --source reddit
+```
+
+- `run_all_sources(sources=None, conn=None)` dispatches to each scraper via `asyncio.gather(..., return_exceptions=True)` — one source failing doesn't kill others
+- Single `sqlite3.Connection` shared across all sources (same WAL session)
+- Prints summary table of topics/videos discovered per source
+
+#### T-11: Data Access
+**Modify**: `src/rekko_server/data.py`
+
+Add `load_viral_topics(source=None, limit=200, conn=None)` and `load_viral_videos(source=None, limit=200, conn=None)`. Follow `load_markets()` pattern — return `pd.DataFrame`.
+
+#### T-12: Tests
+**New file**: `tests/test_viral_discovery.py`
+
+- In-memory SQLite fixture with `init_schema()`
+- Model round-trip tests (all 4 Pydantic models)
+- DB upsert tests (insert, re-insert with higher score, verify peak updated)
+- Generated column tests (`days_trending`/`days_viral` computed correctly)
+- Parsing tests per source (mock API responses → Pydantic models)
+- Orchestrator test (mock all 4 sources, verify DB row counts)
+- Failure isolation test (one source raises, others still write)
+
+#### T-13: Docs
+**Modify**: `CLAUDE.md` commands section + environment variables table + optional deps.
+
+### 1D. Task Dependencies
+
+```
+T-1 (models)  T-2 (schema)  T-4 (config)  T-5 (deps)
+    └──────┬──────┘               │             │
+       T-3 (db writes)           │             │
+    ┌──────┼──────┬──────┐       │             │
+   T-6    T-7    T-8    T-9     │             │
+    └──────┼──────┴──────┘       │             │
+       T-10 (orchestrator)       │             │
+    ┌──────┴──────┐              │             │
+  T-11          T-12 ───────────┘─────────────┘
+ (data.py)     (tests)
+    │
+  T-13 (docs)
+```
+
+T-1, T-2, T-4, T-5 parallelizable. T-6 through T-9 parallelizable once T-3 done.
+
+### 1E. Verification
+
+```bash
+uv sync --extra trends                                             # Install deps
+uv run python -m rekko_server.scrapers.viral_discovery             # Run all sources
+uv run python -m rekko_server.scrapers.viral_discovery --source tiktok  # Single source
+uv run python -c "
+from rekko_server.data import load_viral_topics, load_viral_videos
+print(load_viral_topics())
+print(load_viral_videos())
+"
+uv run pytest tests/test_viral_discovery.py -v                     # Tests
+```
+
+### 1F. Future (not this deliverable)
+
+- **Scheduler loop**: `trend_discovery_loop` (every 4-6h) in `scheduler/__init__.py`
+- **Strategy agent feed**: inject trending signals into `prompts/tiktok_strategy.md` at runtime
+- **Market cross-referencing**: match trending topics to Kalshi/Polymarket markets
+
+---
+
+## Phase 2: Script Quality Upgrades (prompt-only edits)
 
 **Goal**: Incorporate VIDEO_VIRALITY anti-AI-slop and hook density best practices.
 
 **Effort**: Low (prompt text only). **Impact**: High (directly improves retention metrics).
 
-### 1A. Anti-AI-Slop Rules
+### 2A. Anti-AI-Slop Rules
 **File**: `src/rekko_server/prompts/tiktok_script.md`
 
 - Banned phrases: "Let's dive in", "It's worth noting", "In this video", "Without further ado", "Game changer", "Breaking down"
 - Sentence variation mandate: alternate 2-4 word punches with 12-18 word explanations, never 3 same-length sentences in a row
 - Self-correction inclusion: "Include one self-correction or incomplete thought per script"
 
-### 1B. Platform-Specific Pacing
+### 2B. Platform-Specific Pacing
 **File**: `src/rekko_server/prompts/tiktok_script.md`
 
 Current: flat 2.5 words/sec. Change to section-differentiated:
@@ -27,25 +272,25 @@ Current: flat 2.5 words/sec. Change to section-differentiated:
 - Reveal: 2.3 words/sec (clarity for payoff)
 - CTA: 2.8 words/sec (energy, urgency)
 
-### 1C. First-Frame Triple Hook
+### 2C. First-Frame Triple Hook
 **File**: `src/rekko_server/prompts/tiktok_script.md`
 
 First 0.5 seconds must contain ALL THREE simultaneously: (1) on-screen text with 2+ SEO keywords, (2) spoken hook opening, (3) visual element that creates scroll-stop urgency.
 
-### 1D. Chain-of-Thought for Strategy
+### 2D. Chain-of-Thought for Strategy
 **File**: `src/rekko_server/prompts/tiktok_strategy.md`
 
 Add: "Before outputting your strategy, write a 3-sentence reasoning chain explaining WHY this hook archetype and bias type are the best fit for THIS specific market."
 
 ---
 
-## Phase 2: Multi-Platform Distribution
+## Phase 3: Multi-Platform Distribution
 
 **Goal**: 3x distribution reach per video (TikTok + YouTube Shorts + Instagram Reels).
 
 **Effort**: Medium. **Impact**: High.
 
-### 2A. Platform Export Profiles
+### 3A. Platform Export Profiles
 **New file**: `src/rekko_server/publishing/platform_profiles.py`
 **Modify**: `src/rekko_server/video/config.py`
 
@@ -59,7 +304,7 @@ Per VIDEO_VIRALITY optimal settings:
 
 **Approach**: Render master at highest quality (YouTube's 8-15 Mbps). FFmpeg transcode for platform variants (bitrate + optional duration trim for Instagram). Generate platform-specific metadata via post_package agent.
 
-### 2B. YouTube Shorts Publishing
+### 3B. YouTube Shorts Publishing
 **New file**: `src/rekko_server/publishing/youtube.py`
 
 - YouTube Data API v3 via `google-api-python-client`
@@ -68,14 +313,14 @@ Per VIDEO_VIRALITY optimal settings:
 - Title includes #Shorts hashtag
 - YouTube-optimized description + keywords from post_package
 
-### 2C. Instagram Reels Publishing
+### 3C. Instagram Reels Publishing
 **New file**: `src/rekko_server/publishing/instagram.py`
 
 - Meta Graph API (Instagram Content Publishing API)
 - Upload video container -> publish
 - Platform-specific caption (max 5 hashtags, keyword-rich first 55 chars)
 
-### 2D. Staggered Cross-Post Loop
+### 3D. Staggered Cross-Post Loop
 **New file**: `src/rekko_server/scheduler/cross_post.py`
 **Modify**: `src/rekko_server/scheduler/__init__.py`
 
@@ -83,7 +328,7 @@ Per VIDEO_VIRALITY: TikTok first -> Instagram 2h later -> YouTube 4h later. Neve
 
 ---
 
-## Phase 3: Motion Video Generation (replace broken Sora)
+## Phase 4: Motion Video Generation (replace broken Sora)
 
 **Goal**: Replace dead Sora 2 backend with working AI video generation.
 
@@ -109,29 +354,6 @@ Sora shut down March 24, 2026. The `visuals_sora.py` backend is dead code.
 Follow existing pattern: `VIDEO_IMAGE_MODEL=kling:kling-3-pro` dispatches to new backend. Same async interface as `generate_sora_video()`. Polling pattern (submit job -> poll status -> download) reusable from `visuals_sora.py`.
 
 **Hybrid approach** (per VIDEO_VIRALITY): Motion video for hook section only (most important for retention), stills for rest (cheaper + faster).
-
----
-
-## Phase 4: Trend Research System
-
-**Goal**: Data-driven content strategy informed by what's actually going viral.
-
-**Effort**: Medium. **Impact**: Medium (compounds over time).
-
-### 4A. Viral Video Analyzer
-**New file**: `src/rekko_server/scrapers/viral_analyzer.py`
-**New model**: `src/rekko_server/models/viral_research.py`
-
-Extend existing ScrapeCreators integration (`publishing/scrapecreators.py`) to:
-1. Find top-performing prediction market / finance videos on TikTok
-2. Calculate outlier score: views / creator's median views (identifies format hits vs audience hits)
-3. Store in SQLite for analysis
-4. Feed trending formats into strategy agent prompt
-
-### 4B. Feed Into Strategy Agent
-**Modify**: `src/rekko_server/prompts/tiktok_strategy.md`
-
-Add a "trending formats" context section with current high-performing hook types, durations, and hashtags from the viral analyzer.
 
 ---
 
@@ -193,20 +415,20 @@ Generate 2-3 hook variants per video (different archetypes), publish alternating
 ## Dependency Graph
 
 ```
-Phase 1 (Script quality)     ─── independent
-Phase 2 (Multi-platform)     ──> Phase 5 (Analytics) ──> Phase 6 (A/B)
-Phase 3 (Motion video)       ─── independent
-Phase 4 (Trend research)     ─── independent
+Phase 1 (Trend discovery)    ─── CURRENT PRIORITY
+Phase 2 (Script quality)     ─── independent
+Phase 3 (Multi-platform)     ──> Phase 5 (Analytics) ──> Phase 6 (A/B)
+Phase 4 (Motion video)       ─── independent
 ```
 
 ## Owner Mapping
 
 | Phase | Owner | Why |
 |---|---|---|
-| 1 - Script quality | James or Daniel | Prompt edits only |
-| 2 - Multi-platform | Daniel | Publishing + video pipeline |
-| 3 - Motion video | Daniel | Video pipeline backend |
-| 4 - Trend research | James | Scraping + data analysis |
+| 1 - Trend discovery | James | Scraping + data + DB |
+| 2 - Script quality | James or Daniel | Prompt edits only |
+| 3 - Multi-platform | Daniel | Publishing + video pipeline |
+| 4 - Motion video | Daniel | Video pipeline backend |
 | 5 - Analytics | James | Analytics + ML |
 | 6 - A/B testing | Both | James: measurement, Daniel: variant pipeline |
 
@@ -215,9 +437,12 @@ Phase 4 (Trend research)     ─── independent
 | Item | Cost/mo | Phase |
 |---|---|---|
 | ElevenLabs Creator (existing) | $22 | - |
-| Kling AI 3.0 Pro | $37 | Phase 3 |
-| YouTube Data API | Free | Phase 2 |
-| Instagram Graph API | Free | Phase 2 |
-| **Total** | **$59/mo** | |
+| ScrapeCreators | ~$2 (at current usage) | Phase 1 |
+| Google Trends (pytrends) | Free | Phase 1 |
+| YouTube Data API | Free | Phase 1, 3 |
+| Reddit API (praw) | Free | Phase 1 |
+| Instagram Graph API | Free | Phase 3 |
+| Kling AI 3.0 Pro | $37 | Phase 4 |
+| **Total** | **$61/mo** | |
 
-Budget-constrained: Veo 3.1 ($20/mo) instead of Kling -> **$42/mo total**.
+Budget-constrained: Veo 3.1 ($20/mo) instead of Kling -> **$44/mo total**.
