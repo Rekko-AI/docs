@@ -249,6 +249,228 @@ uv run pytest tests/test_viral_discovery.py -v                     # Tests
 
 ---
 
+## Phase 1.5: Viral B-roll Source Discovery & Download
+
+**Goal**: Download actual mp4 files for viral short-form videos so they can be used as source material for "found-footage" stitched B-roll inside Rekko-generated TikToks. Two complementary flows:
+
+1. **Targeted** — given a market we're about to produce, search TikTok / YouTube Shorts for videos featuring that market's subject and download them.
+2. **Backfill** — drain the existing `viral_videos` table (already populated by Phase 1's trending feed scraper) by downloading every viral video we haven't grabbed yet.
+
+Both flows write into the same download infrastructure on the existing `viral_videos` table — one source of truth for "is this video downloaded yet."
+
+**Effort**: Medium. **Impact**: High (unlocks the found-footage workflow Daniel has been describing — replaces AI stills + Ken Burns with cuts of real viral content).
+
+**Owner**: James (discovery + download). Daniel uses the downloaded clips to build the stitched-clip video pipeline next.
+
+### 1.5.0 Decisions Locked
+
+- **Search query**: market title verbatim. No LLM entity extraction yet — cheapest version that lets us validate result quality before adding intelligence.
+- **Sources**: TikTok (existing `ScrapeCreatorsClient.search_keyword`) + YouTube Shorts (existing `search_viral_shorts`). No Instagram, no Reddit.
+- **Filter**: duration 5–60s, sort by most-liked, posted within last ~30 days.
+- **Storage**: flat layout — `data/viral_broll/{video_id}.mp4`. Same file can serve multiple markets (no per-market subdirectories, no duplication).
+- **Download tool**: `yt-dlp` Python library, wrapped in `asyncio.to_thread()`.
+- **Download metadata**: lives on `viral_videos` (added via idempotent ALTER TABLE).
+- **Market association**: lives in a new thin `viral_broll_candidates` table.
+- **No production-worker / scheduler hookup this session.** CLI is the only entry point. Validation = run on three markets, eyeball the downloads.
+
+### 1.5A. Schema (modify `db/schema.py`)
+
+**Migration** (idempotent, follows existing pattern at `schema.py:257-262`):
+
+```python
+for col_ddl in [
+    "ALTER TABLE viral_videos ADD COLUMN file_path TEXT",
+    "ALTER TABLE viral_videos ADD COLUMN file_size_bytes INTEGER",
+    "ALTER TABLE viral_videos ADD COLUMN download_status TEXT NOT NULL DEFAULT 'pending'",
+    "ALTER TABLE viral_videos ADD COLUMN download_error TEXT",
+    "ALTER TABLE viral_videos ADD COLUMN downloaded_at TIMESTAMP",
+]:
+    try:
+        conn.execute(col_ddl)
+    except sqlite3.OperationalError:
+        pass
+conn.commit()
+```
+
+**New association table**:
+
+```sql
+CREATE TABLE IF NOT EXISTS viral_broll_candidates (
+    id              TEXT PRIMARY KEY,    -- "{market_key}:{viral_video_id}"
+    market_key      TEXT NOT NULL,       -- "{platform}:{platform_id}"
+    market_title    TEXT,
+    viral_video_id  TEXT NOT NULL REFERENCES viral_videos(id),
+    query_used      TEXT NOT NULL,
+    score           REAL NOT NULL DEFAULT 0.0,
+    discovered_at   TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_viral_broll_market
+    ON viral_broll_candidates(market_key, score DESC);
+CREATE INDEX IF NOT EXISTS idx_viral_videos_download_status
+    ON viral_videos(download_status);
+```
+
+### 1.5B. Pydantic Model (modify `models/viral.py`)
+
+Add `ViralBrollCandidate`:
+
+```python
+class ViralBrollCandidate(BaseModel):
+    id: str = Field(description="Synthetic ID: {market_key}:{viral_video_id}")
+    market_key: str = Field(description="Market identifier as {platform}:{platform_id}")
+    market_title: str | None = Field(default=None, description="Market title at discovery time")
+    viral_video_id: str = Field(description="FK to viral_videos.id")
+    query_used: str = Field(description="Search query that surfaced this video")
+    score: float = Field(default=0.0, description="Ranking score")
+    discovered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+```
+
+Status field is plain `str`, not `Literal[...]`, to match `viral_videos.source` convention.
+
+### 1.5C. CRUD (modify `db/viral.py`)
+
+All take Pydantic models / kwargs, follow existing `INSERT ... ON CONFLICT(id) DO UPDATE SET` pattern:
+
+- `upsert_broll_candidate(conn, *, candidate: ViralBrollCandidate)` — upsert, refreshes `score` and `query_used` on conflict.
+- `mark_video_downloaded(conn, *, video_id: str, file_path: str, file_size_bytes: int)` — sets `download_status='downloaded'`, `downloaded_at=now`.
+- `mark_video_failed(conn, *, video_id: str, error: str)` — sets `download_status='failed'`, `download_error`.
+- `get_pending_video_downloads(conn, *, source: str | None = None, limit: int = 50) -> list[dict]` — returns `viral_videos` rows where `download_status='pending'`, ordered by `last_seen_at DESC`.
+- `get_broll_candidates_for_market(conn, *, market_key: str, limit: int = 20) -> list[dict]` — joins `viral_broll_candidates` with `viral_videos`, ordered by `score DESC`.
+- `count_broll_for_market(conn, *, market_key: str) -> dict[str, int]` — `{pending, downloaded, failed}` counts via join.
+
+### 1.5D. yt-dlp Downloader (new `scrapers/viral_broll_downloader.py`)
+
+```python
+async def download_video(
+    url: str,
+    dest_dir: Path,
+    *,
+    video_id: str,
+) -> tuple[Path, int]:
+    """Download a single short-form video via yt-dlp.
+
+    Returns (file_path, file_size_bytes). Raises yt_dlp.utils.DownloadError on failure.
+    Synchronous yt-dlp call wrapped in asyncio.to_thread().
+    """
+```
+
+- Output template: `{dest_dir}/{video_id}.%(ext)s`
+- Format: `"best[height<=1080][ext=mp4]/best[ext=mp4]/best"`
+- `quiet=True`, `no_warnings=True`, `noprogress=True`
+- Resolves actual file via `prepare_filename`
+
+### 1.5E. Orchestrator + CLI (new `scrapers/viral_broll.py`)
+
+Two public coroutines:
+
+```python
+async def fetch_broll_for_market(
+    *,
+    market_key: str,
+    query: str | None = None,
+    market_title: str | None = None,
+    max_per_source: int = 10,
+    download: bool = True,
+    conn: sqlite3.Connection | None = None,
+    settings: Settings | None = None,
+) -> BrollFetchStats:
+    """Targeted flow: search → upsert viral_videos → upsert candidates → download top N."""
+
+async def backfill_pending_downloads(
+    *,
+    source: str | None = None,
+    limit: int = 50,
+    conn: sqlite3.Connection | None = None,
+    settings: Settings | None = None,
+) -> BackfillStats:
+    """Backfill flow: drain viral_videos.download_status='pending' via yt-dlp."""
+```
+
+Helpers:
+- `_resolve_query_and_title(conn, market_key, query, market_title)` — splits `market_key` on `:`, calls `get_market_id` + `get_market` from `db/markets.py:45`.
+- `_normalize_tiktok_result(item, *, query) -> tuple[ViralVideo, ViralVideoSnapshot]` — uses existing `ViralVideo` model so we write into the same table the trending feed writes into.
+- `_normalize_youtube_result(viral_video, viral_snapshot) -> tuple[ViralVideo, ViralVideoSnapshot]` — passthrough; `search_viral_shorts` already returns the right shape.
+- `_score_candidate(views, duration_seconds) -> float` — `log1p(views) + duration_fit_bonus`. Duration fit: 1.0 for 10–30s, 0.5 for 5–60s, 0 outside.
+
+CLI uses argparse subcommands:
+
+```bash
+# Targeted: download viral videos featuring this market's subject
+uv run python -m rekko_server.scrapers.viral_broll fetch \
+    --market-key kalshi:KXMARKET-25 [--query "Trump speech"] [--no-download] [--max-per-source 10]
+
+# Backfill: download viral videos already discovered by Phase 1's trending feed
+uv run python -m rekko_server.scrapers.viral_broll backfill \
+    [--source tiktok|youtube_shorts] [--limit 50]
+```
+
+Both subcommands print a summary at the end (counts + total bytes).
+
+### 1.5F. Config (modify `config.py`)
+
+```python
+viral_broll_dir: str = "data/viral_broll"
+viral_broll_max_per_source: int = 10
+viral_broll_min_duration: float = 5.0
+viral_broll_max_duration: float = 60.0
+viral_broll_lookback_days: int = 30
+```
+
+### 1.5G. Dependency (modify `pyproject.toml`)
+
+Add `yt-dlp>=2025.1` to the existing `trends` extra. Same install command James already runs: `uv sync --extra trends`.
+
+### 1.5H. Tests (new `tests/test_viral_broll.py`)
+
+In-memory SQLite + `init_schema()`. Covers:
+
+- `ViralBrollCandidate` Pydantic round-trip
+- `upsert_broll_candidate` insert + re-insert preserves `score` semantics
+- `mark_video_downloaded` and `mark_video_failed` transitions on `viral_videos`
+- `get_pending_video_downloads` returns only pending rows, respects `source` filter
+- `get_broll_candidates_for_market` ordering and join
+- `_score_candidate` boundary cases (5s, 10s, 30s, 60s, 61s)
+- `_normalize_tiktok_result` parses fixture
+- `fetch_broll_for_market` orchestrator with mocked TikTok + YouTube + downloader (`download=False` and `download=True`)
+- `backfill_pending_downloads` with mocked downloader, asserts state transitions
+- Failure isolation: TikTok client raises → YouTube still writes; one yt-dlp failure → others still succeed
+
+No live API tests in default suite. Optional `@pytest.mark.live` smoke (skipped without keys).
+
+### 1.5I. Docs (modify `CLAUDE.md`)
+
+Add `viral_broll fetch` and `viral_broll backfill` CLI commands under the scrapers block.
+
+### 1.5J. Verification
+
+```bash
+uv sync --extra trends                                      # installs yt-dlp
+uv run pytest tests/test_viral_broll.py -v                  # unit tests
+
+# Backfill test (drains existing trending feed videos)
+uv run python -m rekko_server.scrapers.viral_broll backfill --limit 5
+
+# Targeted test on three markets:
+uv run python -m rekko_server.scrapers.viral_broll fetch --market-key kalshi:<entertainment-id>
+uv run python -m rekko_server.scrapers.viral_broll fetch --market-key kalshi:<sports-id>
+uv run python -m rekko_server.scrapers.viral_broll fetch --market-key kalshi:<politics-id>
+
+ls -lh data/viral_broll/
+```
+
+**End-of-session decision gate**: Open 5–10 of the downloaded mp4s by hand. Are they real clips of the right people/subject? Are durations workable for stitching? If yes → next session is clip-segment selection (scene detection + LLM picker) + Remotion integration. If no → next session is LLM entity extraction.
+
+### 1.5K. Risks
+
+- **TikTok yt-dlp reliability**: TikTok rotates anti-scraping defenses; the yt-dlp TikTok extractor breaks frequently. Mitigation: catch `DownloadError`, mark `failed`, continue. Discovery metadata is still useful even when the file isn't.
+- **Storage growth**: 10 markets × 20 clips × ~5 MB ≈ 1 GB. No cleanup job in this session. Future Phase 1.5b: delete clips for resolved markets after 30 days.
+- **Touching Daniel's table**: ALTER TABLE on `viral_videos`. Migration is additive + idempotent (matches existing pattern at `schema.py:257-262`); existing INSERTs are unaffected.
+- **Score function is heuristic**: views + duration_fit only. Validate by inspecting top-5 vs bottom-5 after a real run.
+- **Copyright**: clips will be reused inside derivative Rekko videos. James/Daniel decision; out of scope for this plan.
+
+---
+
 ## Phase 2: Script Quality Upgrades (prompt-only edits)
 
 **Goal**: Incorporate VIDEO_VIRALITY anti-AI-slop and hook density best practices.
