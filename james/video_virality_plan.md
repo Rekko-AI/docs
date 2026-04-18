@@ -471,6 +471,190 @@ ls -lh data/viral_broll/
 
 ---
 
+## Phase 1.6: Hard-filtered General Viral Pool (2026-04-13 pivot)
+
+**Goal**: Replace the market-targeted B-roll pipeline with a single general pool of genuinely viral (5M+ views) entertainment clips that any Rekko video can draw from. Stop downloading low-engagement, low-production-quality, non-viral content.
+
+**Trigger**: Diagnostic SQL against the 59 clips downloaded by Phase 1.5 backfill revealed that only 4 of 59 clear a 5M peak-views bar. 53% don't even hit 50K views. The pipeline's "viral" was aspirational — no view floor existed.
+
+**Result distribution** (2026-04-13, all 59 downloaded clips):
+
+| Threshold | Count | % |
+|---|---|---|
+| ≥ 5M views | 4 | 7% |
+| ≥ 1M views | 8 | 14% |
+| ≥ 500K views | 11 | 19% |
+| ≥ 100K views | 20 | 34% |
+| ≥ 50K views | 28 | 47% |
+
+**Effort**: Small. **Impact**: High (fixes the root cause of the "videos feel off" problem; unblocks the found-footage workflow).
+
+**Owner**: James.
+
+### 1.6.0 Decisions Locked (2026-04-13)
+
+- **No market intersection.** Stop trying to match viral clips to specific prediction markets. The `fetch_broll_for_market()` path, the `viral_broll_candidates` table, Daniel's `viral_mapper.py` semantic matcher, and the `fetch --market-key` CLI subcommand all go **dormant** — not deleted. They may re-enter scope later as a *ranking* signal within the general pool (different problem than "find viral content about market X").
+- **Yesterday's LLM entity extraction plan is shelved.** There are no market titles to extract entities from.
+- **Single general pool.** All downloads go to `data/viral_broll/general_viral/`. Market subdirectories no longer created.
+- **Hard 5M peak-views floor.** No tiered fallback, no per-source relaxation. `peak_views < 5_000_000` → rejected. One number, one gate.
+- **Engagement filter dropped.** At 5M views the 3% engagement-rate check is functionally redundant. One signal is cleaner than two.
+- **Hand-curated keyword list (~15-20 terms, static Python constant).** Entertainment + topical adjacency. Not LLM-generated. Not per-market. Revisited manually each quarter.
+- **Sources unchanged.** TikTok via ScrapeCreators + YouTube Shorts. English filter (`_is_likely_english`) stays. Duration gate 5-60s stays.
+- **Purge the 55 existing sub-5M clips.** Mark `download_status='skipped'`, delete mp4 files from `general_viral/`. Keep the 4 survivors.
+
+### 1.6A. Keyword list (new constant in `scrapers/viral_broll.py`)
+
+Starter set — James to trim/extend before wiring. Target ≤ 20 terms, enforce bucket diversity (no single category > 40%).
+
+```python
+GENERAL_VIRAL_KEYWORDS: list[str] = [
+    # Sports / betting wins
+    "sports celebration",
+    "parlay hit reaction",
+    "gambling win",
+    "game winning moment",
+    # Finance / crypto
+    "stock market crash reaction",
+    "crypto millionaire",
+    "bitcoin pump",
+    "day trader reaction",
+    # Political / news drama
+    "political debate reaction",
+    "breaking news reaction",
+    # Pure reaction / hype
+    "shocked reaction",
+    "unbelievable moment",
+    "crowd goes wild",
+    "insane reaction",
+    # Money / wealth
+    "money rain",
+    "lottery winner reaction",
+]
+```
+
+Each keyword runs once per discovery cycle against each source (TikTok + YouTube).
+
+### 1.6B. Discovery rewrite
+
+**Files**: `scrapers/viral_broll.py`, `scrapers/viral_discovery.py` (whichever drives the scheduler's `trend_discovery_loop`).
+
+- Replace current query-generation logic with a loop over `GENERAL_VIRAL_KEYWORDS`.
+- For each keyword: call `_search_tiktok(query, max_results=10)` + `_search_youtube(query, max_results=10, settings=settings)`.
+- Apply filters **before** DB insert / upsert:
+  1. English (`_is_likely_english(title)`) — already present.
+  2. Duration 5-60s — already present.
+  3. **`peak_views >= settings.viral_broll_min_peak_views` (default `5_000_000`)** ← new hard floor.
+- Deduplicate across keywords by `platform_video_id`.
+- Keywords returning zero post-filter candidates: log and skip. Expected for some niche terms.
+
+### 1.6C. Backfill path update
+
+**File**: `scrapers/viral_broll.py` → `backfill_pending_downloads()`.
+
+- Before download attempt, join `viral_video_snapshots` to check `MAX(views) >= 5_000_000`. Below floor → `mark_video_skipped(reason="below_5m_view_floor")`, skip download.
+- Storage path unchanged: `data/viral_broll/general_viral/{source}_{video_id}.{ext}`.
+
+### 1.6D. One-off purge of existing clips
+
+**New CLI subcommand**: `viral_broll purge-below-floor` — or a one-off script in `scripts/`.
+
+Pseudocode:
+```python
+# Find all downloaded clips under the 5M floor
+rows = conn.execute("""
+    SELECT v.id, v.file_path
+    FROM viral_videos v
+    LEFT JOIN (
+        SELECT video_id, MAX(views) AS peak
+        FROM viral_video_snapshots
+        GROUP BY video_id
+    ) p ON p.video_id = v.id
+    WHERE v.download_status = 'downloaded'
+      AND (p.peak IS NULL OR p.peak < 5000000)
+""").fetchall()
+
+for row in rows:
+    if row["file_path"] and Path(row["file_path"]).exists():
+        Path(row["file_path"]).unlink()
+    mark_video_skipped(
+        conn,
+        video_id=row["id"],
+        reason="below_5m_view_floor_2026-04-13",
+    )
+```
+
+Expected: 55 rows purged, 4 survivors remain on disk.
+
+### 1.6E. Config change
+
+**File**: `config.py` (add under the existing `viral_broll_*` block, ~line 199):
+
+```python
+viral_broll_min_peak_views: int = 5_000_000  # Hard floor at ingest + backfill
+```
+
+### 1.6F. Retire (don't delete) the targeted-fetch path
+
+- Leave `fetch_broll_for_market()` and its CLI subcommand `fetch --market-key` in place — unused.
+- Leave `viral_broll_candidates` table and CRUD helpers intact.
+- Leave `viral_mapper.py` untouched (Daniel's code).
+- Leave the download columns on `viral_videos`.
+- Update `CLAUDE.md` scrapers block: mark `viral_broll fetch` as deprecated/dormant; mention `viral_broll backfill` as the sole active path.
+
+### 1.6G. Tests
+
+**File**: `tests/test_viral_broll.py`.
+
+Add:
+- `test_ingest_rejects_below_5m_view_floor` — 100K-view result filtered out at ingest.
+- `test_ingest_accepts_above_5m_view_floor` — 10M-view result passes.
+- `test_backfill_skips_sub_5m_clips` — seeded row with 500K peak views → marked `skipped`, file not downloaded.
+- `test_purge_below_floor_removes_files_and_marks_skipped` — seed DB with mixed-views downloaded rows + files on disk, run purge, assert sub-5M rows are `skipped` with files gone, 5M+ rows untouched.
+- `test_keyword_loop_dedups_across_keywords` — same `platform_video_id` surfaced by two keywords → written once.
+
+Mark existing `fetch_broll_for_market` tests `@pytest.mark.skip(reason="dormant per Phase 1.6")` or leave untouched (they still exercise code paths that compile).
+
+### 1.6H. Verification
+
+```bash
+# 1. Purge existing sub-5M clips
+uv run python -m rekko_server.scrapers.viral_broll purge-below-floor
+# Expected: 55 rows purged, 4 remain.
+
+# 2. Run discovery with keyword list + 5M floor
+uv run python -m rekko_server.scrapers.viral_discovery
+# Or trigger trend_discovery_loop via scheduler.
+
+# 3. Drain pending downloads
+uv run python -m rekko_server.scrapers.viral_broll backfill --limit 50
+
+# 4. Eyeball at least 10 of the new clips in data/viral_broll/general_viral/
+ls -lh data/viral_broll/general_viral/
+```
+
+**Success criteria**:
+- ≥20 clips on disk after one discovery+backfill cycle.
+- 100% ≥ 5M peak views (verify via SQL).
+- 100% pass English filter.
+- Subjective eyeball test: "these look like the viral videos I'd see on my own FYP." James is the judge.
+
+### 1.6I. Risks
+
+- **Keyword list produces too few hits**: Some terms may return zero post-5M results. Mitigation: iterate list after first run. If first full sweep produces < 20 clips, drop floor to 2M temporarily — do not adjust mid-run.
+- **Topical bias toward reactions**: If keyword list skews to "shocked face" content the pool homogenizes. Mitigation: enforce ≥4 buckets (sports, finance, political, reactions), no bucket > 40% of terms.
+- **ScrapeCreators / YouTube quota burn**: 15 keywords × 2 sources × discovery frequency. Estimate before wiring to the 4-hour scheduler loop; raise interval if needed.
+- **Silent drift of "5M = viral"**: Platform norms shift. Add a periodic sanity check — if < 10% of searched candidates clear 5M, revisit the floor.
+
+### 1.6J. Decision gate for the next session after this one
+
+1. Confirm / edit `GENERAL_VIRAL_KEYWORDS` (James owns the list).
+2. Run purge → verify 4 survivors.
+3. Run discovery → backfill → eyeball ≥ 10 new clips.
+4. **If quality passes**: wire the pool into Remotion B-roll selection (next phase — clip picker for Rekko video composition).
+5. **If quality fails**: the problem is keyword design, not the architecture. Iterate the list. Do NOT jump to entity extraction — that's solving a different problem.
+
+---
+
 ## Phase 2: Script Quality Upgrades (prompt-only edits)
 
 **Goal**: Incorporate VIDEO_VIRALITY anti-AI-slop and hook density best practices.
