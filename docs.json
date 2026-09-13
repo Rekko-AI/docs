@@ -112,7 +112,11 @@
               "api-reference/events/trending-events",
               "api-reference/events/search-events",
               "api-reference/events/get-event",
-              "api-reference/events/event-markets"
+              "api-reference/events/event-markets",
+              "api-reference/events/event-analysis",
+              "api-reference/events/analyze-event",
+              "api-reference/events/event-probability-map",
+              "api-reference/events/event-correlation"
             ]
           },
           {
@@ -130,6 +134,7 @@
               "api-reference/insights/list-analyses",
               "api-reference/insights/trigger-analysis",
               "api-reference/insights/poll-status",
+              "api-reference/insights/poll-status-by-id",
               "api-reference/insights/screen-markets"
             ]
           },

@@ -734,7 +734,7 @@
           "Markets"
         ],
         "summary": "List prediction markets",
-        "description": "List current prediction markets with pricing data.\n\nUse ?query= to search by keyword (e.g. ?query=bitcoin).\nUse ?source= to filter by platform.",
+        "description": "List current prediction markets with pricing data.\n\nUse ?query= to search by keyword in the title (e.g. ?query=bitcoin).\nUse ?category= to filter by category (e.g. ?category=Crypto) \u2014 more reliable\nthan keyword search, which misses markets whose titles say BTC or ETH.\nUse ?source= to filter by platform.",
         "operationId": "/v1/markets",
         "parameters": [
           {
@@ -763,6 +763,19 @@
               "title": "Query"
             },
             "description": "Search markets by keyword in title (case-insensitive)"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 60,
+              "description": "Filter by category, e.g. Crypto, Politics, Economics (case-insensitive)",
+              "default": "",
+              "title": "Category"
+            },
+            "description": "Filter by category, e.g. Crypto, Politics, Economics (case-insensitive)"
           },
           {
             "name": "limit",
@@ -1259,13 +1272,59 @@
         }
       }
     },
-    "/v1/markets/{platform}/{market_id}/analyze/{analysis_id}/status": {
+    "/v1/analyses/{analysis_id}/status": {
       "get": {
         "tags": [
           "Insights"
         ],
         "summary": "Poll analysis status",
-        "description": "Check the status of an async analysis.",
+        "description": "Check the status of an async analysis.\n\nCanonical form: an analysis_id is sufficient to find a run, so callers\nthat started one without knowing the platform can still collect it.",
+        "operationId": "/v1/analyses/{analysis_id}/status",
+        "parameters": [
+          {
+            "name": "analysis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "examples": [
+                "rk-a1b2c3d4e5f6"
+              ],
+              "title": "Analysis Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/markets/{platform}/{market_id}/analyze/{analysis_id}/status": {
+      "get": {
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Poll analysis status (market-scoped)",
+        "description": "Market-scoped alias of /analyses/{analysis_id}/status.\n\nKept so existing poll_url values stay valid. platform and market_id are\nnot used for the lookup.",
         "operationId": "/v1/markets/{platform}/{market_id}/analyze/{analysis_id}/status",
         "parameters": [
           {
